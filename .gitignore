@@ -1,0 +1,21 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# File sementara user & database lokal
+temp/*
+!temp/.gitkeep
+*.db
+*.sqlite3
+
+# Log
+*.log
+
+# IDE
+.vscode/
+.idea/
