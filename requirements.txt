@@ -1,5 +1,9 @@
-# Phase 1 - dependency dasar
-# Dependency lain (pypdf, PyMuPDF, Pillow, python-docx, dst.)
-# akan ditambahkan pada phase berikutnya.
+# Phase 1
 python-telegram-bot>=21.0,<23.0
 python-dotenv>=1.0.0
+
+# Phase 2 (validasi file)
+pypdf[crypto]>=4.0.0
+Pillow>=10.0.0
+
+# Dependency lain (PyMuPDF, python-docx, dst.) ditambahkan di phase berikutnya.

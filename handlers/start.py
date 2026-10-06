@@ -8,9 +8,11 @@ from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
 from config import Config
+from handlers.common import get_services
 from utils.keyboards import back_keyboard, main_menu_keyboard
 
 MAIN_MENU_TEXT = "📄 <b>DOCUMENT BOT</b>\n\nPilih fitur:"
+EXPIRED_TEXT = "⌛ Session expired.\n\nSilakan mulai kembali dengan /start."
 
 
 def build_help_text(config: Config) -> str:
@@ -19,7 +21,7 @@ def build_help_text(config: Config) -> str:
         "Bot ini membantu mengolah PDF dan dokumen langsung dari Telegram.\n\n"
         "<b>Cara pakai</b>\n"
         "1. Pilih fitur dari menu.\n"
-        "2. Kirim file yang diminta.\n"
+        "2. Kirim file yang diminta (sebagai dokumen/file).\n"
         "3. Tunggu hasilnya dikirim oleh bot.\n\n"
         "<b>Batasan</b>\n"
         f"• Ukuran maksimal per file: {config.max_file_size_mb} MB\n"
@@ -33,9 +35,16 @@ def build_help_text(config: Config) -> str:
     )
 
 
+def _reset_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Buang session lama + file temp milik user (jika ada)."""
+    user = update.effective_user
+    if user:
+        get_services(context).sessions.end(user.id)
+
+
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """/start: sapa user dan tampilkan menu utama."""
-    # Phase 2: reset session + hapus temp files milik user di sini.
+    """/start: reset session, sapa user, tampilkan menu utama."""
+    _reset_session(update, context)
     user = update.effective_user
     name = html.escape(user.first_name) if user and user.first_name else "teman"
     await update.effective_message.reply_text(
@@ -46,7 +55,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """/menu: tampilkan menu utama tanpa sapaan."""
+    """/menu: reset session, tampilkan menu utama tanpa sapaan."""
+    _reset_session(update, context)
     await update.effective_message.reply_text(
         MAIN_MENU_TEXT,
         reply_markup=main_menu_keyboard(),
@@ -56,7 +66,7 @@ async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/help: tampilkan bantuan."""
-    config: Config = context.application.bot_data["config"]
+    config = get_services(context).config
     await update.effective_message.reply_text(
         build_help_text(config),
         reply_markup=back_keyboard(),
