@@ -20,6 +20,7 @@ CB_DONE = "act:done"
 CB_LIST = "list:show"
 FEATURE_PREFIX = "feature:"
 ORDER_PREFIX = "ord:"  # ord:up:<fid> | ord:down:<fid> | ord:del:<fid>
+ROTATE_PREFIX = "rot:"  # rot:90 | rot:180 | rot:270
 
 
 @dataclass(frozen=True)
@@ -139,3 +140,22 @@ def reorder_keyboard(fids: list[str]) -> InlineKeyboardMarkup:
     ]
     rows.append([InlineKeyboardButton("⬅️ Back", callback_data=CB_LIST), _cancel_btn()])
     return InlineKeyboardMarkup(rows)
+
+
+def cancel_only_keyboard() -> InlineKeyboardMarkup:
+    """Hanya tombol Cancel (dipakai saat bot menunggu input teks)."""
+    return InlineKeyboardMarkup([[_cancel_btn()]])
+
+
+def rotate_keyboard() -> InlineKeyboardMarkup:
+    """Pilihan rotasi untuk fitur Rotate PDF."""
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("↩️ 90°", callback_data=f"{ROTATE_PREFIX}90"),
+                InlineKeyboardButton("🔄 180°", callback_data=f"{ROTATE_PREFIX}180"),
+                InlineKeyboardButton("↪️ 270°", callback_data=f"{ROTATE_PREFIX}270"),
+            ],
+            [_cancel_btn()],
+        ]
+    )

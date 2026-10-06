@@ -34,6 +34,7 @@ class Config:
     bot_token: str
     max_file_size: int
     max_files: int
+    max_session_size: int
     session_timeout: int
     temp_dir: Path
     log_level: str
@@ -85,6 +86,7 @@ def load_config() -> Config:
         bot_token=token,
         max_file_size=max_file_size,
         max_files=_get_int("MAX_FILES", 20),
+        max_session_size=_get_int("MAX_SESSION_SIZE", 100 * 1024 * 1024),
         session_timeout=_get_int("SESSION_TIMEOUT", 600, minimum=30),
         temp_dir=temp_dir,
         log_level=os.getenv("LOG_LEVEL", "INFO").strip().upper() or "INFO",

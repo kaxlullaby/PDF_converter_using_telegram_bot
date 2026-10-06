@@ -27,6 +27,7 @@ class SessionFile:
     path: Path     # lokasi di temp (nama acak)
     size: int      # ukuran byte
     kind: str      # "pdf" | "jpeg" | "png" | "docx" | "doc"
+    pages: int | None = None  # jumlah halaman (khusus PDF)
 
 
 @dataclass
@@ -36,6 +37,7 @@ class Session:
     feature_key: str
     files: list[SessionFile] = field(default_factory=list)
     panel_message_id: int | None = None
+    awaiting: str | None = None  # input teks yang ditunggu, mis. "pages" (Split)
     last_activity: float = field(default_factory=time.monotonic)
 
     def touch(self) -> None:

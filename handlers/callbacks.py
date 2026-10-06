@@ -16,6 +16,7 @@ from handlers.files import (
     build_reorder,
     max_files_for,
 )
+from handlers.pdf import run_merge, run_rotate
 from handlers.start import EXPIRED_TEXT, MAIN_MENU_TEXT, build_help_text
 from utils.keyboards import (
     CB_ADD,
@@ -29,6 +30,7 @@ from utils.keyboards import (
     FEATURE_PREFIX,
     FEATURES,
     ORDER_PREFIX,
+    ROTATE_PREFIX,
     back_keyboard,
     main_menu_keyboard,
     menu_only_keyboard,
@@ -142,12 +144,25 @@ async def _dispatch(
         await _handle_order(query, session, feature, config, sessions, data)
         return None
 
+    if data.startswith(ROTATE_PREFIX):
+        if feature.key != "rotate" or not session.files:
+            return "Kirim file PDF terlebih dahulu."
+        try:
+            angle = int(data[len(ROTATE_PREFIX):])
+        except ValueError:
+            return None
+        await run_rotate(update, context, session, angle)
+        return None
+
     if data == CB_DONE:
         if not session.files:
             return "Belum ada file. Kirim file terlebih dahulu."
         if len(session.files) < feature.min_files:
             return f"Minimal {feature.min_files} file untuk fitur ini."
-        # Phase 3+: panggil service pemrosesan di sini.
+        if feature.key == "merge":
+            await run_merge(update, context, session)
+            return None
+        # Phase 4-5: fitur lain dipanggil di sini.
         return (
             f"🚧 Pemrosesan {feature.label} akan diaktifkan pada Phase {feature.phase}.\n\n"
             "File Anda masih tersimpan sementara. Tekan Cancel untuk menghapusnya."

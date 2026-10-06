@@ -22,6 +22,7 @@ from telegram.ext import (
 from config import Config, ConfigError, load_config
 from handlers.callbacks import handle_callback
 from handlers.files import handle_document, handle_photo, handle_unsupported
+from handlers.pdf import handle_text
 from handlers.start import EXPIRED_TEXT, help_command, menu_command, start_command
 from utils.file_manager import FileManager
 from utils.keyboards import menu_only_keyboard
@@ -141,6 +142,9 @@ def build_application(config: Config) -> Application:
     app.add_handler(MessageHandler(filters.Document.ALL & private, handle_document))
     app.add_handler(MessageHandler(filters.PHOTO & private, handle_photo))
     app.add_handler(MessageHandler(filters.ATTACHMENT & private, handle_unsupported))
+
+    # Pesan teks biasa (mis. nomor halaman untuk Split PDF).
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & private, handle_text))
 
     app.add_error_handler(error_handler)
     return app

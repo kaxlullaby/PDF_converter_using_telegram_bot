@@ -19,6 +19,7 @@ from telegram.ext import ContextTypes
 from config import Config
 from handlers.common import get_services
 from handlers.start import EXPIRED_TEXT
+from services.pdf_common import get_page_count
 from utils.file_manager import StorageError, sanitize_filename
 from utils.file_validator import (
     KIND_LABELS,
@@ -32,15 +33,20 @@ from utils.keyboards import (
     Feature,
     FEATURES,
     add_more_keyboard,
+    cancel_only_keyboard,
     collecting_keyboard,
     main_menu_keyboard,
     menu_only_keyboard,
     nav_keyboard,
     reorder_keyboard,
+    rotate_keyboard,
 )
 from utils.session_manager import Session, SessionExpired, SessionFile
 
 logger = logging.getLogger(__name__)
+
+# Fitur yang setelah menerima file menunggu input teks dari user.
+AWAIT_INPUT = {"split": "pages"}
 
 MSG_STORAGE_FULL = "❌ Server sedang kehabisan penyimpanan.\n\nSilakan coba lagi beberapa saat lagi."
 MSG_DOWNLOAD_FAILED = "❌ Gagal mengunduh file dari Telegram.\n\nSilakan kirim ulang file Anda."
@@ -108,9 +114,25 @@ def build_panel(
         )
     else:
         item = session.files[0]
+        pages = f", {item.pages} halaman" if item.pages else ""
+        received = f"✅ File diterima:\n{html.escape(item.name)} ({format_size(item.size)}{pages})"
+        if feature.key == "split":
+            text = (
+                f"📂 <b>{feature.label}</b>\n\n{received}\n\n"
+                "Masukkan halaman yang ingin dipisahkan.\n\n"
+                "Contoh:\n<code>1-5</code>\n<code>2,4,7</code>\n<code>3-8</code>\n\n"
+                "Hasil mengikuti urutan yang Anda ketik."
+            )
+            return text, cancel_only_keyboard()
+        if feature.key == "rotate":
+            text = (
+                f"📂 <b>{feature.label}</b>\n\n{received}\n\n"
+                "Pilih rotasi (searah jarum jam):"
+            )
+            return text, rotate_keyboard()
+        # Fitur lain: pemrosesan menyusul di phase berikutnya.
         text = (
-            f"📂 <b>{feature.label}</b>\n\n"
-            f"✅ File diterima:\n{html.escape(item.name)} ({format_size(item.size)})\n\n"
+            f"📂 <b>{feature.label}</b>\n\n{received}\n\n"
             f"🚧 Pemrosesan akan diaktifkan pada Phase {feature.phase}."
         )
     return text, collecting_keyboard(feature.multi)
@@ -195,6 +217,15 @@ async def _receive(
         await message.reply_text(text)
         return
 
+    # 2b. Batas total ukuran semua file dalam satu proses
+    used = sum(f.size for f in session.files)
+    if used + (file_size or 0) > config.max_session_size:
+        await message.reply_text(
+            "❌ Total ukuran file dalam satu proses terlalu besar.\n\n"
+            f"Maksimal {config.max_session_size // (1024 * 1024)} MB per proses."
+        )
+        return
+
     # 3. Validasi metadata + disk (sebelum download)
     if is_photo:
         file_name = f"photo_{len(session.files) + 1}.jpg"
@@ -253,6 +284,14 @@ async def _receive(
         await message.reply_text(EXPIRED_TEXT, reply_markup=menu_only_keyboard())
         return
 
+    # Jumlah halaman (PDF) untuk ditampilkan dan dipakai validasi input halaman.
+    pages = None
+    if detected == "pdf":
+        try:
+            pages = await asyncio.to_thread(get_page_count, dest)
+        except Exception:
+            logger.warning("Gagal menghitung halaman", exc_info=True)
+
     # 6. Simpan ke session lalu tampilkan daftar terbaru
     session.touch()
     session.files.append(
@@ -262,8 +301,10 @@ async def _receive(
             path=dest,
             size=dest.stat().st_size,
             kind=detected,
+            pages=pages,
         )
     )
+    session.awaiting = AWAIT_INPUT.get(feature.key)
     await refresh_panel(context, session, feature, config)
 
 
