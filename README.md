@@ -2,6 +2,8 @@
 
 Mini iLovePDF + Word converter yang berjalan sepenuhnya di Telegram.
 
+Terdapat 8 Phase untuk proyek ini
+
 > README lengkap akan disusun di Phase 8. Untuk sekarang:
 
 ```bash
