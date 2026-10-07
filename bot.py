@@ -23,6 +23,7 @@ from config import Config, ConfigError, load_config
 from handlers.callbacks import handle_callback
 from handlers.files import handle_document, handle_photo, handle_unsupported
 from handlers.pdf import handle_text
+from services.pdf_common import PdfProcessingError, get_fitz
 from handlers.start import EXPIRED_TEXT, help_command, menu_command, start_command
 from utils.file_manager import FileManager
 from utils.keyboards import menu_only_keyboard
@@ -158,6 +159,14 @@ def main() -> None:
 
     setup_logging(config.log_level)
     logger.info("Document Bot dimulai...")
+
+    try:
+        get_fitz()
+    except PdfProcessingError:
+        logger.warning(
+            "PyMuPDF belum terpasang: Compress, PDF -> JPG, dan JPG -> PDF tidak akan berfungsi. "
+            "Jalankan: python -m pip install -r requirements.txt"
+        )
 
     app = build_application(config)
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)

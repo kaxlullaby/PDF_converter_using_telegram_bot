@@ -97,6 +97,12 @@ class FileManager:
             raise ValueError(f"Ekstensi tidak aman: {ext!r}")
         return self.prepare_user_dir(user_id) / f"{uuid.uuid4().hex}{ext}"
 
+    def new_work_dir(self, user_id: int) -> Path:
+        """Sub-folder kerja untuk hasil proses (ikut terhapus bersama folder user)."""
+        path = self.prepare_user_dir(user_id) / f"work_{uuid.uuid4().hex[:8]}"
+        path.mkdir()
+        return path
+
     # ---------- disk ----------
     def check_disk_space(self, needed: int = 0) -> None:
         try:

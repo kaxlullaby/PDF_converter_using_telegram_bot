@@ -1,9 +1,12 @@
 """Fungsi bersama untuk semua service PDF (tanpa dependensi Telegram)."""
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from pypdf import PdfReader, PdfWriter
+
+logger = logging.getLogger(__name__)
 
 # Batas halaman hasil akhir, supaya server tidak kehabisan memori.
 MAX_OUTPUT_PAGES = 2000
@@ -32,3 +35,32 @@ def get_page_count(path: Path) -> int:
 def write_pdf(writer: PdfWriter, output: Path) -> None:
     with Path(output).open("wb") as fh:
         writer.write(fh)
+
+
+class MissingDependencyError(PdfProcessingError):
+    """Library yang dibutuhkan belum terpasang di server."""
+
+
+def get_fitz():
+    """Import PyMuPDF saat dibutuhkan (lazy), sehingga bot tetap bisa start tanpanya."""
+    try:
+        import pymupdf as fitz  # nama modul baru (PyMuPDF >= 1.24.3)
+    except ImportError:
+        try:
+            import fitz  # nama modul lama
+        except ImportError:
+            logger.error("PyMuPDF belum terpasang. Jalankan: python -m pip install PyMuPDF")
+            raise MissingDependencyError(
+                "Fitur ini belum siap di server (PyMuPDF belum terpasang)."
+            ) from None
+    return fitz
+
+
+def open_fitz_document(path: Path):
+    """Buka PDF dengan PyMuPDF. Pakai: `with open_fitz_document(p) as doc:`."""
+    fitz = get_fitz()
+    doc = fitz.open(str(path))
+    if doc.needs_pass and not doc.authenticate(""):
+        doc.close()
+        raise PdfProcessingError("PDF dilindungi password.")
+    return doc

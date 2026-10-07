@@ -35,6 +35,7 @@ from utils.keyboards import (
     add_more_keyboard,
     cancel_only_keyboard,
     collecting_keyboard,
+    compress_keyboard,
     main_menu_keyboard,
     menu_only_keyboard,
     nav_keyboard,
@@ -130,12 +131,28 @@ def build_panel(
                 "Pilih rotasi (searah jarum jam):"
             )
             return text, rotate_keyboard()
+        if feature.key == "compress":
+            text = (
+                f"📂 <b>{feature.label}</b>\n\n{received}\n\n"
+                "Pilih tingkat kompresi:\n\n"
+                "🟢 <b>Low</b> – kualitas hampir sama, ukuran sedikit berkurang\n"
+                "🟡 <b>Medium</b> – seimbang antara kualitas dan ukuran\n"
+                "🔴 <b>High</b> – ukuran terkecil, kualitas gambar menurun"
+            )
+            return text, compress_keyboard()
+        if feature.key == "pdf2jpg":
+            text = (
+                f"📂 <b>{feature.label}</b>\n\n{received}\n\n"
+                "Setiap halaman akan dikonversi menjadi satu gambar JPG.\n"
+                "Tekan tombol di bawah untuk memulai."
+            )
+            return text, collecting_keyboard(False, feature.done_label)
         # Fitur lain: pemrosesan menyusul di phase berikutnya.
         text = (
             f"📂 <b>{feature.label}</b>\n\n{received}\n\n"
             f"🚧 Pemrosesan akan diaktifkan pada Phase {feature.phase}."
         )
-    return text, collecting_keyboard(feature.multi)
+    return text, collecting_keyboard(feature.multi, feature.done_label)
 
 
 def build_add_more(
@@ -147,7 +164,7 @@ def build_add_more(
         f"Files: {count}/{config.max_files}\n\n"
         "📥 Silakan kirim file berikutnya sekarang."
     )
-    return text, add_more_keyboard()
+    return text, add_more_keyboard(feature.done_label)
 
 
 def build_reorder(session: Session, feature: Feature) -> tuple[str, InlineKeyboardMarkup]:

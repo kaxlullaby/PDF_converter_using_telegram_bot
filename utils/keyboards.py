@@ -21,6 +21,7 @@ CB_LIST = "list:show"
 FEATURE_PREFIX = "feature:"
 ORDER_PREFIX = "ord:"  # ord:up:<fid> | ord:down:<fid> | ord:del:<fid>
 ROTATE_PREFIX = "rot:"  # rot:90 | rot:180 | rot:270
+COMPRESS_PREFIX = "cmp:"  # cmp:low | cmp:medium | cmp:high
 
 
 @dataclass(frozen=True)
@@ -32,6 +33,7 @@ class Feature:
     kind: str         # jenis input: "pdf" | "image" | "word"
     multi: bool = False   # True = terima banyak file (mode Collecting Files)
     min_files: int = 1    # minimal file agar boleh diproses
+    done_label: str = "✅ Done"  # teks tombol untuk memulai proses
 
     @property
     def callback_data(self) -> str:
@@ -43,16 +45,17 @@ FEATURES: dict[str, Feature] = {
     for f in (
         Feature("merge", "🔗 Merge PDF",
                 "Gabungkan 2–20 file PDF menjadi satu.", 3, "pdf",
-                multi=True, min_files=2),
+                multi=True, min_files=2, done_label="✅ Merge PDF"),
         Feature("split", "✂️ Split PDF",
                 "Ambil halaman tertentu dari satu PDF (contoh: 1-5 atau 2,4,7).", 3, "pdf"),
         Feature("compress", "📦 Compress PDF",
                 "Perkecil ukuran PDF (Low / Medium / High).", 4, "pdf"),
         Feature("pdf2jpg", "🖼 PDF → JPG",
-                "Ubah setiap halaman PDF menjadi gambar JPG.", 4, "pdf"),
+                "Ubah setiap halaman PDF menjadi gambar JPG.", 4, "pdf",
+                done_label="🖼 Convert to JPG"),
         Feature("jpg2pdf", "📄 JPG → PDF",
                 "Gabungkan 1–20 gambar (JPG/PNG) menjadi satu PDF.", 4, "image",
-                multi=True, min_files=1),
+                multi=True, min_files=1, done_label="📄 Convert to PDF"),
         Feature("rotate", "🔄 Rotate PDF",
                 "Putar halaman PDF 90°, 180°, atau 270°.", 3, "pdf"),
         Feature("word2pdf", "📝 Word → PDF",
@@ -106,9 +109,9 @@ def menu_only_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-def collecting_keyboard(multi: bool) -> InlineKeyboardMarkup:
+def collecting_keyboard(multi: bool, done_label: str = "✅ Done") -> InlineKeyboardMarkup:
     """Tombol di bawah daftar file yang sudah diterima."""
-    done = InlineKeyboardButton("✅ Done", callback_data=CB_DONE)
+    done = InlineKeyboardButton(done_label, callback_data=CB_DONE)
     if multi:
         return InlineKeyboardMarkup(
             [
@@ -122,9 +125,9 @@ def collecting_keyboard(multi: bool) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([[done, _cancel_btn()]])
 
 
-def add_more_keyboard() -> InlineKeyboardMarkup:
+def add_more_keyboard(done_label: str = "✅ Done") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        [[InlineKeyboardButton("✅ Done", callback_data=CB_DONE), _cancel_btn()]]
+        [[InlineKeyboardButton(done_label, callback_data=CB_DONE), _cancel_btn()]]
     )
 
 
@@ -156,6 +159,18 @@ def rotate_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton("🔄 180°", callback_data=f"{ROTATE_PREFIX}180"),
                 InlineKeyboardButton("↪️ 270°", callback_data=f"{ROTATE_PREFIX}270"),
             ],
+            [_cancel_btn()],
+        ]
+    )
+
+
+def compress_keyboard() -> InlineKeyboardMarkup:
+    """Pilihan tingkat kompresi untuk fitur Compress PDF."""
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("🟢 Low Compression", callback_data=f"{COMPRESS_PREFIX}low")],
+            [InlineKeyboardButton("🟡 Medium Compression", callback_data=f"{COMPRESS_PREFIX}medium")],
+            [InlineKeyboardButton("🔴 High Compression", callback_data=f"{COMPRESS_PREFIX}high")],
             [_cancel_btn()],
         ]
     )

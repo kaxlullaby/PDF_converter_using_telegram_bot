@@ -16,9 +16,16 @@ from handlers.files import (
     build_reorder,
     max_files_for,
 )
-from handlers.pdf import run_merge, run_rotate
+from handlers.pdf import (
+    run_compress,
+    run_jpg_to_pdf,
+    run_merge,
+    run_pdf_to_jpg,
+    run_rotate,
+)
 from handlers.start import EXPIRED_TEXT, MAIN_MENU_TEXT, build_help_text
 from utils.keyboards import (
+    COMPRESS_PREFIX,
     CB_ADD,
     CB_BACK,
     CB_CANCEL,
@@ -154,6 +161,12 @@ async def _dispatch(
         await run_rotate(update, context, session, angle)
         return None
 
+    if data.startswith(COMPRESS_PREFIX):
+        if feature.key != "compress" or not session.files:
+            return "Kirim file PDF terlebih dahulu."
+        await run_compress(update, context, session, data[len(COMPRESS_PREFIX):])
+        return None
+
     if data == CB_DONE:
         if not session.files:
             return "Belum ada file. Kirim file terlebih dahulu."
@@ -162,7 +175,13 @@ async def _dispatch(
         if feature.key == "merge":
             await run_merge(update, context, session)
             return None
-        # Phase 4-5: fitur lain dipanggil di sini.
+        if feature.key == "jpg2pdf":
+            await run_jpg_to_pdf(update, context, session)
+            return None
+        if feature.key == "pdf2jpg":
+            await run_pdf_to_jpg(update, context, session)
+            return None
+        # Phase 5: Word <-> PDF dipanggil di sini.
         return (
             f"🚧 Pemrosesan {feature.label} akan diaktifkan pada Phase {feature.phase}.\n\n"
             "File Anda masih tersimpan sementara. Tekan Cancel untuk menghapusnya."

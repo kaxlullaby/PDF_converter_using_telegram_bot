@@ -6,4 +6,7 @@ python-dotenv>=1.0.0
 pypdf[crypto]>=4.0.0
 Pillow>=10.0.0
 
-# Dependency lain (PyMuPDF, python-docx, dst.) ditambahkan di phase berikutnya.
+# Phase 4 (Compress, PDF -> JPG, JPG -> PDF)
+PyMuPDF>=1.24.0
+
+# Dependency lain (python-docx, dst.) ditambahkan di phase berikutnya.

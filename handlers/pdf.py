@@ -1,6 +1,6 @@
-"""Pemrosesan PDF (Phase 3): Merge, Split, Rotate.
+"""Pemrosesan dokumen (Phase 2-4): Merge, Split, Rotate, Compress, PDF -> JPG, JPG -> PDF.
 
-Setiap proses mengikuti alur yang sama (_run_job):
+Semua proses memakai alur yang sama (_run_job):
     status "Processing..." -> kerjakan di thread -> kirim hasil -> status "complete"
     -> (apa pun hasilnya) hapus session + semua file temp user.
 """
@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import html
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
@@ -18,9 +19,13 @@ from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 
 from handlers.common import get_services
+from handlers.files import format_size
 from handlers.start import EXPIRED_TEXT
+from services.compress_pdf import PROFILES, compress_pdf
+from services.jpg_to_pdf import images_to_pdf
 from services.merge_pdf import merge_pdfs
 from services.pdf_common import PdfProcessingError, get_page_count
+from services.pdf_to_jpg import build_zip, delivery_mode, render_pages
 from services.rotate_pdf import VALID_ANGLES, rotate_pdf
 from services.split_pdf import EXAMPLE_HINT, PageSelectionError, parse_page_ranges, split_pdf
 from utils.file_manager import sanitize_filename
@@ -43,6 +48,29 @@ MSG_RESULT_TOO_BIG = (
 )
 
 
+@dataclass
+class JobOutput:
+    """Hasil sebuah proses: daftar (path_di_disk, nama_saat_dikirim) + keterangan."""
+
+    files: list[tuple[Path, str]]
+    caption: str
+
+
+def _single_pdf(output_name: str, fn: Callable[[Path], str]) -> Callable[[Path], JobOutput]:
+    """Bungkus fungsi yang menghasilkan satu PDF: fn(path_output) -> caption."""
+
+    def work(workdir: Path) -> JobOutput:
+        out = workdir / "result.pdf"
+        caption = fn(out)
+        return JobOutput([(out, output_name)], caption)
+
+    return work
+
+
+def _output_name(prefix: str, original: str, ext: str = ".pdf") -> str:
+    return sanitize_filename(f"{prefix}_{Path(original).stem}{ext}")
+
+
 async def _edit(
     message: Message, text: str, markup: InlineKeyboardMarkup | None = None
 ) -> None:
@@ -58,29 +86,32 @@ async def _run_job(
     session: Session,
     status: Message,
     *,
-    work: Callable[[Path], str],
-    output_name: str,
+    work: Callable[[Path], JobOutput],
 ) -> None:
-    """Jalankan `work(out_path) -> caption` di thread, kirim hasilnya, lalu bersihkan."""
+    """Jalankan `work(workdir) -> JobOutput` di thread, kirim hasilnya, lalu bersihkan."""
     _config, sessions, files = get_services(context)
-    out_path = files.new_file_path(session.user_id, ".pdf")
     try:
+        workdir = files.new_work_dir(session.user_id)
         await _edit(status, MSG_PROCESSING)
-        caption = await asyncio.to_thread(work, out_path)
+        output = await asyncio.to_thread(work, workdir)
 
-        if out_path.stat().st_size > TELEGRAM_UPLOAD_LIMIT:
+        if any(path.stat().st_size > TELEGRAM_UPLOAD_LIMIT for path, _ in output.files):
             await _edit(status, MSG_RESULT_TOO_BIG, menu_only_keyboard())
             return
 
-        with out_path.open("rb") as fh:
-            await context.bot.send_document(
-                chat_id=session.chat_id,
-                document=fh,
-                filename=output_name,
-                caption=caption,
-                read_timeout=60,
-                write_timeout=120,
-            )
+        total = len(output.files)
+        for index, (path, name) in enumerate(output.files, start=1):
+            with path.open("rb") as fh:
+                await context.bot.send_document(
+                    chat_id=session.chat_id,
+                    document=fh,
+                    filename=name,
+                    caption=output.caption if index == total else None,
+                    read_timeout=60,
+                    write_timeout=120,
+                )
+            if index < total:
+                await asyncio.sleep(0.3)  # beri jeda agar tidak kena batas kecepatan Telegram
         await _edit(status, MSG_DONE, menu_only_keyboard())
 
     except PdfProcessingError as exc:
@@ -95,27 +126,23 @@ async def _run_job(
         sessions.end(session.user_id)  # sukses ataupun gagal: file temp dihapus
 
 
-def _output_name(prefix: str, original: str) -> str:
-    return sanitize_filename(f"{prefix}_{Path(original).stem}.pdf")
-
-
 # ---------------------------------------------------------------------------
-# Merge (dipicu tombol Done)
+# Merge (tombol Merge PDF)
 # ---------------------------------------------------------------------------
 async def run_merge(update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session) -> None:
     paths = [f.path for f in session.files]  # urutan = urutan di daftar
 
-    def work(out: Path) -> str:
+    def fn(out: Path) -> str:
         total = merge_pdfs(paths, out)
         return f"✅ Merge PDF selesai: {len(paths)} file, {total} halaman."
 
     await _run_job(
-        context, session, update.callback_query.message, work=work, output_name="merged.pdf"
+        context, session, update.callback_query.message, work=_single_pdf("merged.pdf", fn)
     )
 
 
 # ---------------------------------------------------------------------------
-# Rotate (dipicu tombol pilihan sudut)
+# Rotate (tombol pilihan sudut)
 # ---------------------------------------------------------------------------
 async def run_rotate(
     update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session, angle: int
@@ -124,7 +151,7 @@ async def run_rotate(
         return
     item = session.files[0]
 
-    def work(out: Path) -> str:
+    def fn(out: Path) -> str:
         pages = rotate_pdf(item.path, angle, out)
         return f"✅ Rotate PDF selesai: {pages} halaman diputar {angle}° searah jarum jam."
 
@@ -132,13 +159,95 @@ async def run_rotate(
         context,
         session,
         update.callback_query.message,
-        work=work,
-        output_name=_output_name("rotated", item.name),
+        work=_single_pdf(_output_name("rotated", item.name), fn),
     )
 
 
 # ---------------------------------------------------------------------------
-# Split (dipicu pesan teks berisi nomor halaman)
+# Compress (tombol pilihan level)
+# ---------------------------------------------------------------------------
+def compress_caption(level: str, original: int, compressed: int) -> str:
+    label = PROFILES[level].label
+    if compressed >= original:
+        head = f"ℹ️ Compress PDF ({label}): ukuran tidak bisa diperkecil lagi."
+        percent = 0
+    else:
+        head = f"✅ Compress PDF ({label}) selesai."
+        percent = round((1 - compressed / original) * 100)
+    return (
+        f"{head}\n\n"
+        f"Original: {format_size(original)}\n"
+        f"Compressed: {format_size(compressed)}\n"
+        f"Reduction: {percent}%"
+    )
+
+
+async def run_compress(
+    update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session, level: str
+) -> None:
+    if level not in PROFILES or not session.files:
+        return
+    item = session.files[0]
+
+    def fn(out: Path) -> str:
+        original, compressed = compress_pdf(item.path, level, out)
+        return compress_caption(level, original, compressed)
+
+    await _run_job(
+        context,
+        session,
+        update.callback_query.message,
+        work=_single_pdf(_output_name("compressed", item.name), fn),
+    )
+
+
+# ---------------------------------------------------------------------------
+# JPG -> PDF (tombol Convert to PDF)
+# ---------------------------------------------------------------------------
+async def run_jpg_to_pdf(
+    update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session
+) -> None:
+    paths = [f.path for f in session.files]  # urutan = urutan di daftar
+
+    def fn(out: Path) -> str:
+        count = images_to_pdf(paths, out)
+        return f"✅ JPG → PDF selesai: {count} gambar menjadi {count} halaman."
+
+    await _run_job(
+        context, session, update.callback_query.message, work=_single_pdf("images.pdf", fn)
+    )
+
+
+# ---------------------------------------------------------------------------
+# PDF -> JPG (tombol Convert to JPG)
+# ---------------------------------------------------------------------------
+async def run_pdf_to_jpg(
+    update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session
+) -> None:
+    item = session.files[0]
+    stem = Path(item.name).stem
+
+    def work(workdir: Path) -> JobOutput:
+        pages = render_pages(item.path, workdir)
+        count = len(pages)
+        named = [
+            (path, _output_name(f"{stem}_page", f"{i:02d}", ".jpg"))
+            for i, path in enumerate(pages, start=1)
+        ]
+        if delivery_mode(count) == "zip":  # lebih dari 10 halaman -> satu file ZIP
+            zip_path = workdir / "pages.zip"
+            build_zip(named, zip_path)
+            return JobOutput(
+                [(zip_path, sanitize_filename(f"{stem}_jpg.zip"))],
+                f"✅ PDF → JPG selesai: {count} halaman dalam 1 file ZIP.",
+            )
+        return JobOutput(named, f"✅ PDF → JPG selesai: {count} halaman.")
+
+    await _run_job(context, session, update.callback_query.message, work=work)
+
+
+# ---------------------------------------------------------------------------
+# Split (pesan teks berisi nomor halaman)
 # ---------------------------------------------------------------------------
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Pesan teks biasa: dipakai untuk input halaman Split; selain itu diberi petunjuk."""
@@ -188,10 +297,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     status = await message.reply_text(MSG_PROCESSING, parse_mode=ParseMode.HTML)
 
-    def work(out: Path) -> str:
+    def fn(out: Path) -> str:
         count = split_pdf(item.path, pages, out)
         return f"✅ Split PDF selesai: {count} dari {total} halaman diambil."
 
     await _run_job(
-        context, session, status, work=work, output_name=_output_name("split", item.name)
+        context, session, status, work=_single_pdf(_output_name("split", item.name), fn)
     )
