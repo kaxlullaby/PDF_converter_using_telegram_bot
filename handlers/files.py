@@ -147,7 +147,24 @@ def build_panel(
                 "Tekan tombol di bawah untuk memulai."
             )
             return text, collecting_keyboard(False, feature.done_label)
-        # Fitur lain: pemrosesan menyusul di phase berikutnya.
+        if feature.key == "word2pdf":
+            text = (
+                f"📂 <b>{feature.label}</b>\n\n{received}\n\n"
+                "Dokumen akan dikonversi ke PDF dengan LibreOffice; format dipertahankan sebisa mungkin.\n"
+                "Tekan tombol di bawah untuk memulai."
+            )
+            return text, collecting_keyboard(False, feature.done_label)
+        if feature.key == "pdf2word":
+            text = (
+                f"📂 <b>{feature.label}</b>\n\n{received}\n\n"
+                "Bot akan mengenali jenis PDF:\n"
+                "📄 <b>Text-based</b> – teks diambil langsung\n"
+                "🖼 <b>Scanned</b> – dibaca dengan OCR\n\n"
+                "Catatan: hasil mungkin tidak 100% mempertahankan layout asli.\n"
+                "Tekan tombol di bawah untuk memulai."
+            )
+            return text, collecting_keyboard(False, feature.done_label)
+        # Cadangan: fitur tanpa panel khusus.
         text = (
             f"📂 <b>{feature.label}</b>\n\n{received}\n\n"
             f"🚧 Pemrosesan akan diaktifkan pada Phase {feature.phase}."

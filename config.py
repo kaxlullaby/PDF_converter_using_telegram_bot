@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -38,6 +39,10 @@ class Config:
     session_timeout: int
     temp_dir: Path
     log_level: str
+    libreoffice_path: str | None = None
+    tesseract_path: str | None = None
+    ocr_languages: str = "ind+eng"
+    convert_timeout: int = 90
 
     @property
     def max_file_size_mb(self) -> int:
@@ -79,6 +84,10 @@ def load_config() -> Config:
             max_file_size,
         )
 
+    ocr_languages = os.getenv("OCR_LANGUAGES", "ind+eng").strip() or "ind+eng"
+    if not re.fullmatch(r"[A-Za-z0-9_]+(\+[A-Za-z0-9_]+)*", ocr_languages):
+        raise ConfigError("OCR_LANGUAGES tidak valid. Contoh yang benar: ind+eng")
+
     temp_dir = BASE_DIR / "temp"
     temp_dir.mkdir(parents=True, exist_ok=True)
 
@@ -90,4 +99,8 @@ def load_config() -> Config:
         session_timeout=_get_int("SESSION_TIMEOUT", 600, minimum=30),
         temp_dir=temp_dir,
         log_level=os.getenv("LOG_LEVEL", "INFO").strip().upper() or "INFO",
+        libreoffice_path=os.getenv("LIBREOFFICE_PATH", "").strip() or None,
+        tesseract_path=os.getenv("TESSERACT_PATH", "").strip() or None,
+        ocr_languages=ocr_languages,
+        convert_timeout=_get_int("CONVERT_TIMEOUT", 90, minimum=10),
     )

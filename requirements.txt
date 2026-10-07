@@ -9,4 +9,9 @@ Pillow>=10.0.0
 # Phase 4 (Compress, PDF -> JPG, JPG -> PDF)
 PyMuPDF>=1.24.0
 
-# Dependency lain (python-docx, dst.) ditambahkan di phase berikutnya.
+# Phase 5 (PDF -> Word)
+python-docx>=1.1.0
+
+# Program eksternal (BUKAN paket pip) untuk Phase 5:
+#   - LibreOffice  : Word -> PDF
+#   - Tesseract OCR: PDF scan -> Word

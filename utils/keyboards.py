@@ -59,9 +59,11 @@ FEATURES: dict[str, Feature] = {
         Feature("rotate", "🔄 Rotate PDF",
                 "Putar halaman PDF 90°, 180°, atau 270°.", 3, "pdf"),
         Feature("word2pdf", "📝 Word → PDF",
-                "Ubah file .doc / .docx menjadi PDF.", 5, "word"),
+                "Ubah file .doc / .docx menjadi PDF.", 5, "word",
+                done_label="📄 Convert to PDF"),
         Feature("pdf2word", "📄 PDF → Word",
-                "Ubah PDF menjadi .docx (dengan OCR untuk PDF hasil scan).", 5, "pdf"),
+                "Ubah PDF menjadi .docx (dengan OCR untuk PDF hasil scan).", 5, "pdf",
+                done_label="📄 Convert to Word"),
     )
 }
 

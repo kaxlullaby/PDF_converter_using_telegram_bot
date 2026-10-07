@@ -1,4 +1,4 @@
-"""Pemrosesan dokumen (Phase 2-4): Merge, Split, Rotate, Compress, PDF -> JPG, JPG -> PDF.
+"""Pemrosesan dokumen: Merge, Split, Rotate, Compress, PDF <-> JPG, Word <-> PDF.
 
 Semua proses memakai alur yang sama (_run_job):
     status "Processing..." -> kerjakan di thread -> kirim hasil -> status "complete"
@@ -26,8 +26,10 @@ from services.jpg_to_pdf import images_to_pdf
 from services.merge_pdf import merge_pdfs
 from services.pdf_common import PdfProcessingError, get_page_count
 from services.pdf_to_jpg import build_zip, delivery_mode, render_pages
+from services.pdf_to_word import KIND_LABELS, ConversionReport, pdf_to_word
 from services.rotate_pdf import VALID_ANGLES, rotate_pdf
 from services.split_pdf import EXAMPLE_HINT, PageSelectionError, parse_page_ranges, split_pdf
+from services.word_to_pdf import word_to_pdf
 from utils.file_manager import sanitize_filename
 from utils.file_validator import MSG_CORRUPT
 from utils.keyboards import menu_only_keyboard
@@ -242,6 +244,66 @@ async def run_pdf_to_jpg(
                 f"✅ PDF → JPG selesai: {count} halaman dalam 1 file ZIP.",
             )
         return JobOutput(named, f"✅ PDF → JPG selesai: {count} halaman.")
+
+    await _run_job(context, session, update.callback_query.message, work=work)
+
+
+# ---------------------------------------------------------------------------
+# Word -> PDF (tombol Convert to PDF)
+# ---------------------------------------------------------------------------
+async def run_word_to_pdf(
+    update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session
+) -> None:
+    config = get_services(context).config
+    item = session.files[0]
+
+    def work(workdir: Path) -> JobOutput:
+        out = workdir / "result.pdf"
+        pages = word_to_pdf(
+            item.path, out, soffice_path=config.libreoffice_path, timeout=config.convert_timeout
+        )
+        caption = (
+            f"✅ Word → PDF selesai: {pages} halaman.\n\n"
+            "ℹ️ Jika tampilan sedikit berbeda dari aslinya, biasanya karena font "
+            "dokumen tidak tersedia di server."
+        )
+        return JobOutput([(out, sanitize_filename(f"{Path(item.name).stem}.pdf"))], caption)
+
+    await _run_job(context, session, update.callback_query.message, work=work)
+
+
+# ---------------------------------------------------------------------------
+# PDF -> Word (tombol Convert to Word)
+# ---------------------------------------------------------------------------
+def word_caption(report: ConversionReport) -> str:
+    lines = [
+        f"✅ PDF → Word selesai: {report.page_count} halaman.",
+        "",
+        f"Jenis PDF: {KIND_LABELS[report.kind]}",
+    ]
+    lines += [f"⚠️ {w}" for w in report.warnings]
+    lines += ["", "ℹ️ Hasil mungkin tidak 100% mempertahankan layout asli (kolom, tabel, dan gambar tidak ikut)."]
+    return "\n".join(lines)
+
+
+async def run_pdf_to_word(
+    update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session
+) -> None:
+    config = get_services(context).config
+    item = session.files[0]
+
+    def work(workdir: Path) -> JobOutput:
+        out = workdir / "result.docx"
+        report = pdf_to_word(
+            item.path,
+            out,
+            workdir,
+            tesseract_path=config.tesseract_path,
+            languages=config.ocr_languages,
+        )
+        return JobOutput(
+            [(out, sanitize_filename(f"{Path(item.name).stem}.docx"))], word_caption(report)
+        )
 
     await _run_job(context, session, update.callback_query.message, work=work)
 

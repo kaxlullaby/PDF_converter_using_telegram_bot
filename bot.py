@@ -24,6 +24,8 @@ from handlers.callbacks import handle_callback
 from handlers.files import handle_document, handle_photo, handle_unsupported
 from handlers.pdf import handle_text
 from services.pdf_common import PdfProcessingError, get_fitz
+from services.pdf_to_word import find_tesseract, list_languages
+from services.word_to_pdf import find_libreoffice
 from handlers.start import EXPIRED_TEXT, help_command, menu_command, start_command
 from utils.file_manager import FileManager
 from utils.keyboards import menu_only_keyboard
@@ -111,6 +113,21 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
             logger.exception("Gagal mengirim pesan error ke user")
 
 
+def log_tool_status(config: Config) -> None:
+    """Tampilkan di log alat eksternal mana yang tersedia (membantu saat troubleshooting)."""
+    office = find_libreoffice(config.libreoffice_path)
+    if office:
+        logger.info("LibreOffice : %s", office)
+    else:
+        logger.warning("LibreOffice tidak ditemukan -> Word -> PDF tidak akan berfungsi")
+
+    tesseract = find_tesseract(config.tesseract_path)
+    if tesseract:
+        logger.info("Tesseract   : %s (bahasa: %s)", tesseract, ", ".join(list_languages(tesseract)) or "?")
+    else:
+        logger.warning("Tesseract tidak ditemukan -> PDF scan tidak bisa di-OCR")
+
+
 def build_application(config: Config) -> Application:
     app = (
         Application.builder()
@@ -167,6 +184,8 @@ def main() -> None:
             "PyMuPDF belum terpasang: Compress, PDF -> JPG, dan JPG -> PDF tidak akan berfungsi. "
             "Jalankan: python -m pip install -r requirements.txt"
         )
+
+    log_tool_status(config)
 
     app = build_application(config)
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)

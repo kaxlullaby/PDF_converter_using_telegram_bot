@@ -21,7 +21,9 @@ from handlers.pdf import (
     run_jpg_to_pdf,
     run_merge,
     run_pdf_to_jpg,
+    run_pdf_to_word,
     run_rotate,
+    run_word_to_pdf,
 )
 from handlers.start import EXPIRED_TEXT, MAIN_MENU_TEXT, build_help_text
 from utils.keyboards import (
@@ -181,7 +183,12 @@ async def _dispatch(
         if feature.key == "pdf2jpg":
             await run_pdf_to_jpg(update, context, session)
             return None
-        # Phase 5: Word <-> PDF dipanggil di sini.
+        if feature.key == "word2pdf":
+            await run_word_to_pdf(update, context, session)
+            return None
+        if feature.key == "pdf2word":
+            await run_pdf_to_word(update, context, session)
+            return None
         return (
             f"🚧 Pemrosesan {feature.label} akan diaktifkan pada Phase {feature.phase}.\n\n"
             "File Anda masih tersimpan sementara. Tekan Cancel untuk menghapusnya."
