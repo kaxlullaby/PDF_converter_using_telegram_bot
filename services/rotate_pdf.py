@@ -5,6 +5,7 @@ from pathlib import Path
 
 from pypdf import PdfWriter
 
+from services.job_context import checkpoint
 from services.pdf_common import open_reader, write_pdf
 
 VALID_ANGLES = (90, 180, 270)
@@ -17,7 +18,9 @@ def rotate_pdf(input_path: Path, angle: int, output: Path) -> int:
 
     reader = open_reader(input_path)
     writer = PdfWriter()
-    for page in reader.pages:
+    total = len(reader.pages)
+    for k, page in enumerate(reader.pages):
+        checkpoint(k, total, 0.0, 0.9)
         page.rotate(angle)  # ditambahkan ke rotasi yang sudah ada
         writer.add_page(page)
     write_pdf(writer, output)

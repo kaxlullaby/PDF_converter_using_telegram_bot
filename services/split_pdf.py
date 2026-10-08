@@ -6,6 +6,7 @@ from pathlib import Path
 
 from pypdf import PdfWriter
 
+from services.job_context import checkpoint
 from services.pdf_common import PdfProcessingError, open_reader, write_pdf
 
 _TOKEN = re.compile(r"^(\d+)(?:-(\d+))?$")
@@ -72,7 +73,8 @@ def split_pdf(input_path: Path, pages: list[int], output: Path) -> int:
         raise PdfProcessingError("Nomor halaman di luar jangkauan.")
 
     writer = PdfWriter()
-    for n in pages:
+    for k, n in enumerate(pages):
+        checkpoint(k, len(pages), 0.0, 0.9)
         writer.add_page(reader.pages[n - 1])
     write_pdf(writer, output)
     return len(pages)

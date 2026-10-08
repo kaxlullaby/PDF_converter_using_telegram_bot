@@ -8,8 +8,8 @@ from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
 from config import Config
-from handlers.common import get_services
-from utils.keyboards import back_keyboard, main_menu_keyboard
+from handlers.common import MSG_BUSY, get_services, menu_keyboard, serialized
+from utils.keyboards import back_keyboard
 
 MAIN_MENU_TEXT = "📄 <b>DOCUMENT BOT</b>\n\nPilih fitur:"
 EXPIRED_TEXT = "⌛ Session expired.\n\nSilakan mulai kembali dengan /start."
@@ -31,39 +31,53 @@ def build_help_text(config: Config) -> str:
         "<b>Perintah</b>\n"
         "/start – tampilkan menu utama\n"
         "/menu – tampilkan menu utama\n"
+        "/history – riwayat pemakaian Anda\n"
         "/help – tampilkan bantuan ini"
     )
 
 
-def _reset_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Buang session lama + file temp milik user (jika ada)."""
+def _reset_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """Buang session lama + file temp user. Return False jika ada proses yang masih berjalan."""
     user = update.effective_user
-    if user:
-        get_services(context).sessions.end(user.id)
+    if user is None:
+        return True
+    sessions = get_services(context).sessions
+    current = sessions.peek(user.id)
+    if current is not None and current.busy:
+        return False
+    sessions.end(user.id)
+    return True
 
 
+@serialized
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/start: reset session, sapa user, tampilkan menu utama."""
-    _reset_session(update, context)
+    if not _reset_session(update, context):
+        await update.effective_message.reply_text(MSG_BUSY)
+        return
     user = update.effective_user
     name = html.escape(user.first_name) if user and user.first_name else "teman"
     await update.effective_message.reply_text(
         f"👋 Halo, <b>{name}</b>!\n\n{MAIN_MENU_TEXT}",
-        reply_markup=main_menu_keyboard(),
+        reply_markup=menu_keyboard(context),
         parse_mode=ParseMode.HTML,
     )
 
 
+@serialized
 async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/menu: reset session, tampilkan menu utama tanpa sapaan."""
-    _reset_session(update, context)
+    if not _reset_session(update, context):
+        await update.effective_message.reply_text(MSG_BUSY)
+        return
     await update.effective_message.reply_text(
         MAIN_MENU_TEXT,
-        reply_markup=main_menu_keyboard(),
+        reply_markup=menu_keyboard(context),
         parse_mode=ParseMode.HTML,
     )
 
 
+@serialized
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/help: tampilkan bantuan."""
     config = get_services(context).config

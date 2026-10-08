@@ -43,6 +43,12 @@ class Config:
     tesseract_path: str | None = None
     ocr_languages: str = "ind+eng"
     convert_timeout: int = 90
+    database_path: Path = Path("data/bot.db")
+    log_file: Path | None = None
+    max_concurrent_jobs: int = 2
+    process_timeout: int = 300
+    admin_ids: frozenset = frozenset()
+    history_retention_days: int = 90
 
     @property
     def max_file_size_mb(self) -> int:
@@ -64,6 +70,12 @@ def _get_int(name: str, default: int, minimum: int = 1) -> int:
     if value < minimum:
         raise ConfigError(f"{name} minimal {minimum}, bukan {value}.")
     return value
+
+
+def _resolve_path(raw: str | None, default: str) -> Path:
+    """Path relatif dihitung dari folder project."""
+    path = Path((raw or "").strip() or default)
+    return path if path.is_absolute() else BASE_DIR / path
 
 
 def load_config() -> Config:
@@ -88,6 +100,17 @@ def load_config() -> Config:
     if not re.fullmatch(r"[A-Za-z0-9_]+(\+[A-Za-z0-9_]+)*", ocr_languages):
         raise ConfigError("OCR_LANGUAGES tidak valid. Contoh yang benar: ind+eng")
 
+    raw_ids = os.getenv("ADMIN_IDS", "").strip()
+    try:
+        admin_ids = frozenset(int(x) for x in re.split(r"[,\s]+", raw_ids) if x)
+    except ValueError:
+        raise ConfigError("ADMIN_IDS harus berupa angka dipisah koma, mis. 12345,67890") from None
+
+    database_path = _resolve_path(os.getenv("DATABASE_PATH"), "data/bot.db")
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+    log_value = (os.getenv("LOG_FILE") or "logs/bot.log").strip()
+    log_file = None if log_value.lower() in ("off", "none", "-") else _resolve_path(log_value, "logs/bot.log")
+
     temp_dir = BASE_DIR / "temp"
     temp_dir.mkdir(parents=True, exist_ok=True)
 
@@ -103,4 +126,10 @@ def load_config() -> Config:
         tesseract_path=os.getenv("TESSERACT_PATH", "").strip() or None,
         ocr_languages=ocr_languages,
         convert_timeout=_get_int("CONVERT_TIMEOUT", 90, minimum=10),
+        database_path=database_path,
+        log_file=log_file,
+        max_concurrent_jobs=_get_int("MAX_CONCURRENT_JOBS", 2),
+        process_timeout=_get_int("PROCESS_TIMEOUT", 300, minimum=30),
+        admin_ids=admin_ids,
+        history_retention_days=_get_int("HISTORY_RETENTION_DAYS", 90),
     )

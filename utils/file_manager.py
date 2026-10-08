@@ -18,6 +18,7 @@ import os
 import re
 import shutil
 import stat
+import time
 import uuid
 from pathlib import Path
 
@@ -136,3 +137,28 @@ class FileManager:
                 _rmtree(child)
                 removed += 1
         return removed
+
+    def cleanup_orphans(self, active_user_ids: set[int], older_than: float) -> int:
+        """Hapus folder user_* yang TIDAK punya session aktif dan sudah lama tidak berubah.
+
+        Jaring pengaman: folder yang tertinggal karena error aneh / proses yang dihentikan paksa.
+        """
+        removed = 0
+        now = time.time()
+        for child in self.temp_dir.iterdir():
+            if not (child.is_dir() and _USER_DIR.match(child.name)):
+                continue
+            if int(child.name[5:]) in active_user_ids:
+                continue
+            try:
+                age = now - child.stat().st_mtime
+            except OSError:
+                continue
+            if age > older_than:
+                _rmtree(child)
+                removed += 1
+        return removed
+
+    def free_bytes(self) -> int:
+        """Ruang disk kosong di lokasi folder temp (untuk pemantauan)."""
+        return shutil.disk_usage(self.temp_dir).free

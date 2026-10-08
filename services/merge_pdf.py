@@ -5,6 +5,7 @@ from pathlib import Path
 
 from pypdf import PdfWriter
 
+from services.job_context import checkpoint
 from services.pdf_common import MAX_OUTPUT_PAGES, PdfProcessingError, open_reader, write_pdf
 
 
@@ -14,7 +15,10 @@ def merge_pdfs(inputs: list[Path], output: Path) -> int:
         raise PdfProcessingError("Minimal 2 file PDF untuk digabung.")
 
     # Reader harus tetap terbuka sampai writer selesai menulis.
-    readers = [open_reader(p) for p in inputs]
+    readers = []
+    for i, path in enumerate(inputs):
+        checkpoint(i, len(inputs), 0.0, 0.4)
+        readers.append(open_reader(path))
     total = sum(len(r.pages) for r in readers)
     if total > MAX_OUTPUT_PAGES:
         raise PdfProcessingError(
@@ -22,7 +26,8 @@ def merge_pdfs(inputs: list[Path], output: Path) -> int:
         )
 
     writer = PdfWriter()
-    for reader in readers:
+    for i, reader in enumerate(readers):
+        checkpoint(i, len(readers), 0.4, 0.9)
         for page in reader.pages:
             writer.add_page(page)
     write_pdf(writer, output)

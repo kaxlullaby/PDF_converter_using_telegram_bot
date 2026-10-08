@@ -1,12 +1,14 @@
 """Session per user (disimpan di memori).
 
 Satu user = satu session. Session menyimpan fitur yang dipilih, daftar file
-yang sudah diterima (urut sesuai kedatangan), dan waktu aktivitas terakhir.
+yang sudah diterima (urut sesuai kedatangan), status proses, dan waktu aktivitas terakhir.
 Folder temp user ikut dihapus setiap kali session berakhir.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -18,6 +20,10 @@ logger = logging.getLogger(__name__)
 
 class SessionExpired(Exception):
     """Session sudah melewati batas waktu (dan sudah dibersihkan)."""
+
+
+class SessionBusy(Exception):
+    """Session sedang menjalankan proses dan tidak boleh diganti/dihapus."""
 
 
 @dataclass
@@ -38,12 +44,16 @@ class Session:
     files: list[SessionFile] = field(default_factory=list)
     panel_message_id: int | None = None
     awaiting: str | None = None  # input teks yang ditunggu, mis. "pages" (Split)
+    busy: bool = False           # True selama proses berjalan di latar belakang
+    cancel_event: threading.Event = field(default_factory=threading.Event)
     last_activity: float = field(default_factory=time.monotonic)
 
     def touch(self) -> None:
         self.last_activity = time.monotonic()
 
     def is_expired(self, timeout: int) -> bool:
+        if self.busy:  # sesi yang sedang diproses tidak boleh kedaluwarsa
+            return False
         return time.monotonic() - self.last_activity > timeout
 
     def index_of(self, fid: str) -> int:
@@ -71,6 +81,25 @@ class SessionManager:
         self._fm = file_manager
         self._timeout = timeout
         self._sessions: dict[int, Session] = {}
+        self._locks: dict[int, asyncio.Lock] = {}
+
+    # ---------- kunci per user ----------
+    def user_lock(self, user_id: int) -> asyncio.Lock:
+        """Satu kunci per user: pesan dari user yang sama diproses berurutan (urutan file terjaga),
+        sedangkan user berbeda tetap berjalan bersamaan."""
+        lock = self._locks.get(user_id)
+        if lock is None:
+            lock = self._locks[user_id] = asyncio.Lock()
+        return lock
+
+    def prune_locks(self) -> None:
+        for user_id in [u for u, lock in self._locks.items() if not lock.locked() and u not in self._sessions]:
+            del self._locks[user_id]
+
+    # ---------- akses ----------
+    def peek(self, user_id: int) -> Session | None:
+        """Lihat session tanpa mencatat aktivitas dan tanpa memeriksa kedaluwarsa."""
+        return self._sessions.get(user_id)
 
     def get(self, user_id: int) -> Session | None:
         """Ambil session aktif user dan catat aktivitas.
@@ -89,6 +118,9 @@ class SessionManager:
 
     def start(self, user_id: int, chat_id: int, feature_key: str) -> Session:
         """Mulai session baru. Session lama (beserta file-nya) dibuang."""
+        existing = self._sessions.get(user_id)
+        if existing is not None and existing.busy:
+            raise SessionBusy
         self.end(user_id)
         self._fm.prepare_user_dir(user_id)
         session = Session(user_id=user_id, chat_id=chat_id, feature_key=feature_key)
@@ -116,6 +148,14 @@ class SessionManager:
     def expired_sessions(self) -> list[Session]:
         return [s for s in self._sessions.values() if s.is_expired(self._timeout)]
 
+    def active_user_ids(self) -> set[int]:
+        return set(self._sessions)
+
+    def request_cancel_all(self) -> None:
+        """Minta semua proses yang sedang berjalan berhenti (dipakai saat bot dimatikan)."""
+        for session in self._sessions.values():
+            session.cancel_event.set()
+
     def end_all(self) -> None:
         self._sessions.clear()
         self._fm.cleanup_all()
@@ -123,3 +163,7 @@ class SessionManager:
     @property
     def active_count(self) -> int:
         return len(self._sessions)
+
+    @property
+    def busy_count(self) -> int:
+        return sum(1 for s in self._sessions.values() if s.busy)

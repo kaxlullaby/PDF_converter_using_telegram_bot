@@ -17,7 +17,7 @@ from telegram.error import BadRequest, NetworkError, TelegramError
 from telegram.ext import ContextTypes
 
 from config import Config
-from handlers.common import get_services
+from handlers.common import MSG_BUSY, get_services, menu_keyboard, serialized
 from handlers.start import EXPIRED_TEXT
 from services.pdf_common import get_page_count
 from utils.file_manager import StorageError, sanitize_filename
@@ -36,7 +36,6 @@ from utils.keyboards import (
     cancel_only_keyboard,
     collecting_keyboard,
     compress_keyboard,
-    main_menu_keyboard,
     menu_only_keyboard,
     nav_keyboard,
     reorder_keyboard,
@@ -225,7 +224,8 @@ async def _receive(
 ) -> None:
     message = update.effective_message
     user = update.effective_user
-    config, sessions, files = get_services(context)
+    services = get_services(context)
+    config, sessions, files = services.config, services.sessions, services.files
 
     # 1. Harus ada session aktif (user sudah memilih fitur)
     try:
@@ -236,8 +236,11 @@ async def _receive(
     if session is None:
         await message.reply_text(
             "📂 Pilih fitur terlebih dahulu sebelum mengirim file.",
-            reply_markup=main_menu_keyboard(),
+            reply_markup=menu_keyboard(context),
         )
+        return
+    if session.busy:  # proses sebelumnya masih berjalan
+        await message.reply_text(MSG_BUSY)
         return
 
     feature = FEATURES[session.feature_key]
@@ -342,6 +345,7 @@ async def _receive(
     await refresh_panel(context, session, feature, config)
 
 
+@serialized
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     doc = update.effective_message.document
     await _receive(
@@ -354,6 +358,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     )
 
 
+@serialized
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Foto yang dikirim sebagai 'photo' (sudah dikompres Telegram jadi JPEG)."""
     photo = update.effective_message.photo[-1]  # resolusi terbesar
@@ -368,6 +373,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     )
 
 
+@serialized
 async def handle_unsupported(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Video, audio, voice, sticker, dll."""
     await update.effective_message.reply_text(

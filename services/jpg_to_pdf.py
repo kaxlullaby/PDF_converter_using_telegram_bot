@@ -12,6 +12,7 @@ from pathlib import Path
 
 from PIL import Image, ImageOps
 
+from services.job_context import checkpoint
 from services.pdf_common import PdfProcessingError, get_fitz
 
 A4_PORTRAIT = (595.0, 842.0)   # ukuran A4 dalam poin (1 poin = 1/72 inci)
@@ -79,7 +80,8 @@ def images_to_pdf(inputs: list[Path], output: Path) -> int:
 
     doc = fitz.open()
     try:
-        for path in inputs:
+        for index, path in enumerate(inputs):
+            checkpoint(index, len(inputs), 0.0, 0.95)
             data, width, height = prepare_image(Path(path))
             page_w, page_h = page_size_for(width, height)
             page = doc.new_page(width=page_w, height=page_h)

@@ -23,6 +23,7 @@ from docx import Document
 from docx.shared import Inches, Pt
 from PIL import Image
 
+from services.job_context import checkpoint
 from services.pdf_common import MissingDependencyError, PdfProcessingError, get_fitz, open_fitz_document
 from services.pdf_to_jpg import compute_scale
 from services.process_utils import ProcessTimeout, run_command
@@ -152,6 +153,7 @@ def extract_pages(input_path: Path) -> list[PageContent]:
         if count > MAX_PAGES:
             raise PdfProcessingError(f"PDF terlalu panjang. Maksimal {MAX_PAGES} halaman.")
         for index in range(count):
+            checkpoint(index, count, 0.0, 0.2)
             page = doc[index]
             data = page.get_text("dict", sort=True)
             blocks = [
@@ -261,7 +263,8 @@ def ocr_pages(
     image_path = Path(work_dir) / "ocr_page.png"
 
     with open_fitz_document(input_path) as doc:
-        for index in indexes:
+        for step, index in enumerate(indexes):
+            checkpoint(step, len(indexes), 0.2, 0.9)
             if time.monotonic() > deadline:
                 raise PdfProcessingError(
                     "Proses OCR memakan waktu terlalu lama.\n\nCoba PDF dengan halaman lebih sedikit."

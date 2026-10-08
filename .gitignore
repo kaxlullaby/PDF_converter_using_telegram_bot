@@ -13,8 +13,10 @@ temp/*
 *.db
 *.sqlite3
 
-# Log
+# Log & data
 *.log
+logs/
+data/
 
 # IDE
 .vscode/

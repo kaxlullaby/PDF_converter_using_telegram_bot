@@ -6,6 +6,7 @@ from pathlib import Path
 
 from PIL import Image
 
+from services.job_context import checkpoint
 from services.pdf_common import PdfProcessingError, get_fitz, open_fitz_document
 
 DPI = 150               # kualitas cukup untuk dibaca di layar / dicetak biasa
@@ -49,6 +50,7 @@ def render_pages(input_path: Path, out_dir: Path) -> list[Path]:
                 "Gunakan Split PDF untuk memotongnya terlebih dahulu."
             )
         for index in range(count):
+            checkpoint(index, count)
             page = doc[index]
             scale = compute_scale(page.rect.width, page.rect.height)
             pix = page.get_pixmap(

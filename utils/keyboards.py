@@ -18,6 +18,7 @@ CB_ADD = "act:add"
 CB_ORDER = "act:order"
 CB_DONE = "act:done"
 CB_LIST = "list:show"
+CB_JOB_CANCEL = "job:cancel"
 FEATURE_PREFIX = "feature:"
 ORDER_PREFIX = "ord:"  # ord:up:<fid> | ord:down:<fid> | ord:del:<fid>
 ROTATE_PREFIX = "rot:"  # rot:90 | rot:180 | rot:270
@@ -77,17 +78,22 @@ def _cancel_btn() -> InlineKeyboardButton:
     return InlineKeyboardButton("❌ Cancel", callback_data=CB_CANCEL)
 
 
-def main_menu_keyboard() -> InlineKeyboardMarkup:
-    """Menu utama sesuai desain: PDF tools, Word tools, lalu Help."""
-    return InlineKeyboardMarkup(
-        [
-            [_btn("merge"), _btn("split")],
-            [_btn("compress"), _btn("pdf2jpg")],
-            [_btn("jpg2pdf"), _btn("rotate")],
-            [_btn("word2pdf"), _btn("pdf2word")],
-            [InlineKeyboardButton("ℹ️ Help", callback_data=CB_MENU_HELP)],
-        ]
-    )
+PDF_TOOLS = ("merge", "split", "compress", "pdf2jpg", "jpg2pdf", "rotate")
+WORD_TOOLS = ("word2pdf", "pdf2word")
+
+
+def main_menu_keyboard(unavailable: frozenset = frozenset()) -> InlineKeyboardMarkup:
+    """Menu utama: PDF tools, Word tools, lalu Help.
+
+    Fitur di `unavailable` (program pendukungnya belum terpasang di server) disembunyikan.
+    """
+
+    def rows(keys: tuple) -> list[list[InlineKeyboardButton]]:
+        visible = [k for k in keys if k not in unavailable]
+        return [[_btn(k) for k in visible[i:i + 2]] for i in range(0, len(visible), 2)]
+
+    help_row = [[InlineKeyboardButton("ℹ️ Help", callback_data=CB_MENU_HELP)]]
+    return InlineKeyboardMarkup(rows(PDF_TOOLS) + rows(WORD_TOOLS) + help_row)
 
 
 def nav_keyboard() -> InlineKeyboardMarkup:
@@ -175,4 +181,11 @@ def compress_keyboard() -> InlineKeyboardMarkup:
             [InlineKeyboardButton("🔴 High Compression", callback_data=f"{COMPRESS_PREFIX}high")],
             [_cancel_btn()],
         ]
+    )
+
+
+def job_keyboard() -> InlineKeyboardMarkup:
+    """Tombol Cancel di pesan status saat proses berjalan."""
+    return InlineKeyboardMarkup(
+        [[InlineKeyboardButton("❌ Cancel", callback_data=CB_JOB_CANCEL)]]
     )

@@ -18,6 +18,7 @@ from pathlib import Path
 
 from PIL import Image
 
+from services.job_context import checkpoint
 from services.pdf_common import get_fitz, open_fitz_document
 
 logger = logging.getLogger(__name__)
@@ -78,7 +79,8 @@ def compress_pdf(input_path: Path, level: str, output_path: Path) -> tuple[int, 
 
     with open_fitz_document(input_path) as doc:
         seen: set[int] = set()
-        for page in doc:
+        for page_no, page in enumerate(doc):
+            checkpoint(page_no, doc.page_count, 0.0, 0.9)
             for img in page.get_images(full=True):
                 xref, smask = img[0], img[1]
                 if xref in seen or smask:  # smask != 0 -> gambar punya transparansi

@@ -8,7 +8,7 @@ from telegram.constants import ParseMode
 from telegram.error import BadRequest, TelegramError
 from telegram.ext import ContextTypes
 
-from handlers.common import get_services
+from handlers.common import MSG_BUSY, get_services, menu_keyboard, serialized
 from handlers.files import (
     build_add_more,
     build_panel,
@@ -27,28 +27,30 @@ from handlers.pdf import (
 )
 from handlers.start import EXPIRED_TEXT, MAIN_MENU_TEXT, build_help_text
 from utils.keyboards import (
-    COMPRESS_PREFIX,
     CB_ADD,
     CB_BACK,
     CB_CANCEL,
     CB_DONE,
+    CB_JOB_CANCEL,
     CB_LIST,
     CB_MENU_HELP,
     CB_MENU_MAIN,
     CB_ORDER,
+    COMPRESS_PREFIX,
     FEATURE_PREFIX,
     FEATURES,
     ORDER_PREFIX,
     ROTATE_PREFIX,
     back_keyboard,
-    main_menu_keyboard,
     menu_only_keyboard,
 )
-from utils.session_manager import SessionExpired
+from utils.session_manager import SessionBusy, SessionExpired
 
 logger = logging.getLogger(__name__)
 
 CANCEL_TEXT = "❌ Proses dibatalkan. File sementara sudah dihapus.\n\n" + MAIN_MENU_TEXT
+MSG_UNAVAILABLE = "Fitur ini sedang tidak tersedia di server."
+MSG_RUNNING = "Proses sedang berjalan. Tunggu sampai selesai, atau tekan Cancel."
 
 
 async def _safe_edit(query, text: str, markup: InlineKeyboardMarkup) -> None:
@@ -74,6 +76,7 @@ async def _answer(query, alert: str | None) -> None:
         logger.debug("Gagal menjawab callback query", exc_info=True)
 
 
+@serialized
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     alert: str | None = None
@@ -89,17 +92,29 @@ async def _dispatch(
     """Proses satu tombol. Return teks popup (alert) bila perlu, selain itu None."""
     query = update.callback_query
     user = update.effective_user
-    config, sessions, _files = get_services(context)
+    services = get_services(context)
+    config, sessions = services.config, services.sessions
+
+    current = sessions.peek(user.id)
+    busy = current is not None and current.busy
+
+    # ---------- membatalkan proses yang sedang berjalan ----------
+    if busy and data in (CB_JOB_CANCEL, CB_CANCEL, CB_BACK, CB_MENU_MAIN):
+        current.cancel_event.set()  # pesan status diperbarui oleh proses itu sendiri
+        return None
+    if data == CB_JOB_CANCEL:  # tombol lama: prosesnya sudah selesai
+        await _safe_edit(query, MAIN_MENU_TEXT, menu_keyboard(context))
+        return None
 
     # ---------- navigasi (tidak butuh session) ----------
     if data in (CB_MENU_MAIN, CB_BACK):
         sessions.end(user.id)
-        await _safe_edit(query, MAIN_MENU_TEXT, main_menu_keyboard())
+        await _safe_edit(query, MAIN_MENU_TEXT, menu_keyboard(context))
         return None
 
     if data == CB_CANCEL:
         sessions.end(user.id)  # hapus semua file temp user
-        await _safe_edit(query, CANCEL_TEXT, main_menu_keyboard())
+        await _safe_edit(query, CANCEL_TEXT, menu_keyboard(context))
         return None
 
     if data == CB_MENU_HELP:
@@ -108,11 +123,18 @@ async def _dispatch(
 
     # ---------- mulai fitur ----------
     if data.startswith(FEATURE_PREFIX):
+        if busy:
+            return MSG_BUSY
         feature = FEATURES.get(data[len(FEATURE_PREFIX):])
         if feature is None:
-            await _safe_edit(query, MAIN_MENU_TEXT, main_menu_keyboard())
+            await _safe_edit(query, MAIN_MENU_TEXT, menu_keyboard(context))
             return None
-        session = sessions.start(user.id, update.effective_chat.id, feature.key)
+        if feature.key in services.unavailable:
+            return MSG_UNAVAILABLE
+        try:
+            session = sessions.start(user.id, update.effective_chat.id, feature.key)
+        except SessionBusy:
+            return MSG_BUSY
         session.panel_message_id = query.message.message_id
         text, markup = build_prompt(feature, config)
         await _safe_edit(query, text, markup)
@@ -126,6 +148,8 @@ async def _dispatch(
     if session is None:
         await _safe_edit(query, EXPIRED_TEXT, menu_only_keyboard())
         return None
+    if session.busy:
+        return MSG_RUNNING  # mencegah Done ditekan dua kali
 
     feature = FEATURES[session.feature_key]
     session.panel_message_id = query.message.message_id  # panel aktif = pesan ini
@@ -174,25 +198,18 @@ async def _dispatch(
             return "Belum ada file. Kirim file terlebih dahulu."
         if len(session.files) < feature.min_files:
             return f"Minimal {feature.min_files} file untuk fitur ini."
-        if feature.key == "merge":
-            await run_merge(update, context, session)
-            return None
-        if feature.key == "jpg2pdf":
-            await run_jpg_to_pdf(update, context, session)
-            return None
-        if feature.key == "pdf2jpg":
-            await run_pdf_to_jpg(update, context, session)
-            return None
-        if feature.key == "word2pdf":
-            await run_word_to_pdf(update, context, session)
-            return None
-        if feature.key == "pdf2word":
-            await run_pdf_to_word(update, context, session)
-            return None
-        return (
-            f"🚧 Pemrosesan {feature.label} akan diaktifkan pada Phase {feature.phase}.\n\n"
-            "File Anda masih tersimpan sementara. Tekan Cancel untuk menghapusnya."
-        )
+        runners = {
+            "merge": run_merge,
+            "jpg2pdf": run_jpg_to_pdf,
+            "pdf2jpg": run_pdf_to_jpg,
+            "word2pdf": run_word_to_pdf,
+            "pdf2word": run_pdf_to_word,
+        }
+        runner = runners.get(feature.key)
+        if runner is None:
+            return "Pilih salah satu opsi pada pesan di atas."
+        await runner(update, context, session)
+        return None
 
     logger.warning("callback_data tidak dikenal: %r", data)
     return None
