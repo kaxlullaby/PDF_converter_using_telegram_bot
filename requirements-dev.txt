@@ -1,0 +1,3 @@
+# Hanya untuk pengembangan / pengujian (tidak perlu di server produksi)
+-r requirements.txt
+pytest>=8.0

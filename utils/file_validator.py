@@ -9,8 +9,11 @@ Contoh: "document.pdf.exe" ditolak di tahap 1 (extension akhirnya .exe).
 from __future__ import annotations
 
 import logging
+import re
 import zipfile
+from dataclasses import dataclass
 from pathlib import Path
+from xml.etree import ElementTree
 
 from PIL import Image
 from pypdf import PdfReader
@@ -21,6 +24,12 @@ MB = 1024 * 1024
 MAX_PDF_PAGES = 500
 MAX_IMAGE_PIXELS = 60_000_000          # ~60 megapiksel, cegah "decompression bomb"
 MAX_DOCX_UNCOMPRESSED = 200 * MB       # cegah "zip bomb"
+MAX_DOCX_ENTRIES = 10_000              # DOCX normal hanya berisi puluhan entri
+MAX_RELS_BYTES = 2 * MB                # file relasi DOCX normal hanya beberapa KB
+# Tautan EKSTERNAL jenis ini akan diambil LibreOffice saat konversi (risiko SSRF / kebocoran data).
+# Hyperlink biasa tidak diambil saat konversi, jadi tetap diizinkan.
+_BLOCKED_EXTERNAL_TYPES = {"image", "attachedtemplate", "oleobject", "frame", "subdocument",
+                           "externallink", "externallinkpath", "afchunk"}
 
 # kind = jenis input yang diminta sebuah fitur
 ALLOWED_EXTENSIONS: dict[str, set[str]] = {
@@ -58,6 +67,18 @@ MSG_CORRUPT = (
     "❌ File tidak dapat diproses.\n\n"
     "Kemungkinan file corrupt atau format tidak didukung."
 )
+
+
+MSG_EXTERNAL_LINK = (
+    "❌ Dokumen berisi gambar/objek yang ditautkan dari luar (bukan tertanam).\n\n"
+    "Di Word: File → Info → Edit Links to Files → Break Link, lalu simpan dan kirim ulang."
+)
+
+
+@dataclass(frozen=True)
+class ContentInfo:
+    detected: str               # "pdf" | "jpeg" | "png" | "docx" | "doc"
+    pages: int | None = None    # jumlah halaman (khusus PDF)
 
 
 def too_large_message(max_size: int) -> str:
@@ -131,9 +152,14 @@ def detect_content_type(head: bytes) -> str | None:
 
 
 def check_content(path: Path, kind: str, max_size: int) -> str:
+    """Seperti inspect_content(), tetapi hanya mengembalikan jenis isi file."""
+    return inspect_content(path, kind, max_size).detected
+
+
+def inspect_content(path: Path, kind: str, max_size: int) -> ContentInfo:
     """Validasi isi file. BLOCKING -> panggil lewat asyncio.to_thread().
 
-    Return jenis isi file ("pdf", "jpeg", "png", "docx", "doc").
+    PDF hanya di-parse SEKALI: jumlah halaman didapat dari proses validasi yang sama.
     """
     path = Path(path)
     try:
@@ -152,9 +178,10 @@ def check_content(path: Path, kind: str, max_size: int) -> str:
     if detected not in ALLOWED_CONTENT[kind]:
         raise ValidationError("bad_signature", MSG_CORRUPT)
 
+    pages: int | None = None
     try:
         if detected == "pdf":
-            _check_pdf(path)
+            pages = _check_pdf(path)
         elif detected in ("jpeg", "png"):
             _check_image(path)
         elif detected == "docx":
@@ -163,13 +190,16 @@ def check_content(path: Path, kind: str, max_size: int) -> str:
             _check_doc(size)
     except ValidationError:
         raise
-    except Exception:  # library gagal membaca -> anggap corrupt
-        logger.warning("Validasi isi gagal untuk %s", path.name, exc_info=True)
+    except Exception as exc:  # library gagal membaca -> anggap corrupt
+        # Satu baris saja: file berbahaya bisa memicu traceback ribuan baris (RecursionError, dst.)
+        # dan penyerang tidak boleh bisa membanjiri log. Detail lengkap hanya di level DEBUG.
+        logger.warning("Validasi isi gagal (%s): %s", path.name, type(exc).__name__)
+        logger.debug("Detail kegagalan validasi", exc_info=True)
         raise ValidationError("corrupt", MSG_CORRUPT) from None
-    return detected
+    return ContentInfo(detected, pages)
 
 
-def _check_pdf(path: Path) -> None:
+def _check_pdf(path: Path) -> int:
     reader = PdfReader(str(path), strict=False)
     if reader.is_encrypted:
         try:
@@ -191,6 +221,7 @@ def _check_pdf(path: Path) -> None:
             f"❌ PDF terlalu banyak halaman.\n\nMaksimal {MAX_PDF_PAGES} halaman per file.",
         )
     _ = reader.pages[0]  # paksa parsing halaman pertama
+    return pages
 
 
 def _check_image(path: Path) -> None:
@@ -213,8 +244,42 @@ def _check_docx(path: Path) -> None:
         names = set(zf.namelist())
         if "[Content_Types].xml" not in names or "word/document.xml" not in names:
             raise ValidationError("corrupt", MSG_CORRUPT)
+        if len(names) > MAX_DOCX_ENTRIES:
+            raise ValidationError("zip_bomb", MSG_CORRUPT)
         if sum(info.file_size for info in zf.infolist()) > MAX_DOCX_UNCOMPRESSED:
             raise ValidationError("zip_bomb", MSG_CORRUPT)
+        if _has_blocked_external_link(zf, names):
+            raise ValidationError("external_link", MSG_EXTERNAL_LINK)
+
+
+def _has_blocked_external_link(zf: zipfile.ZipFile, names: set[str]) -> bool:
+    """True jika ada relasi EKSTERNAL berjenis gambar/template/objek (akan diunduh LibreOffice).
+
+    File relasi (.rels) di-parse sebagai XML sungguhan, bukan dicari dengan teks biasa, supaya
+    tidak bisa dikelabui dengan spasi, tanda kutip, atau karakter entitas (&#69;xternal).
+    DTD/ENTITY ditolak karena DOCX asli tidak pernah memakainya (cegah XML bomb).
+    """
+    for name in names:
+        if not name.lower().endswith(".rels"):
+            continue
+        if zf.getinfo(name).file_size > MAX_RELS_BYTES:
+            return True
+        data = zf.read(name)
+        lowered = data.lower()
+        if b"<!doctype" in lowered or b"<!entity" in lowered:
+            return True
+        try:
+            root = ElementTree.fromstring(data)
+        except ElementTree.ParseError:
+            return True
+        for element in root.iter():
+            if not element.tag.endswith("Relationship"):
+                continue
+            mode = (element.get("TargetMode") or "").strip().lower()
+            rel_type = (element.get("Type") or "").rstrip("/").rsplit("/", 1)[-1].lower()
+            if mode == "external" and rel_type in _BLOCKED_EXTERNAL_TYPES:
+                return True
+    return False
 
 
 def _check_doc(size: int) -> None:

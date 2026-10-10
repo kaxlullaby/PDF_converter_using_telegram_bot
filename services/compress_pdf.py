@@ -47,12 +47,20 @@ def recompress_image(data: bytes, profile: Profile) -> bytes | None:
         return None
     try:
         img = Image.open(io.BytesIO(data))
-        img.load()
     except Exception:
         return None  # format tidak dikenal (mis. JPEG2000 / JBIG2) -> biarkan apa adanya
 
     if img.mode in ("RGBA", "LA", "CMYK") or "transparency" in img.info:
         return None  # jangan merusak transparansi / warna CMYK
+    try:
+        if profile.max_side and img.format == "JPEG" and max(img.size) > profile.max_side:
+            # JPEG bisa didekode langsung dalam ukuran 1/2, 1/4, atau 1/8 (jauh lebih cepat),
+            # tanpa mengurangi hasil akhir karena toh akan diperkecil.
+            ratio = profile.max_side / max(img.size)
+            img.draft("RGB", (round(img.width * ratio), round(img.height * ratio)))
+        img.load()
+    except Exception:
+        return None
     if img.mode not in ("RGB", "L"):
         img = img.convert("RGB")
 

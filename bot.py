@@ -59,6 +59,8 @@ def setup_logging(level: str, log_file: Path | None = None) -> None:
     # sedangkan URL Telegram API mengandung BOT_TOKEN.
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
+    # pypdf mencatat peringatan untuk setiap objek PDF yang rusak; file jahat bisa memicu banjir log.
+    logging.getLogger("pypdf").setLevel(logging.ERROR)
 
 
 def compute_unavailable(config: Config) -> frozenset:

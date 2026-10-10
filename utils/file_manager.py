@@ -30,6 +30,8 @@ MIN_FREE_BYTES = 200 * 1024 * 1024
 _SAFE_EXT = re.compile(r"^\.[a-z0-9]{1,5}$")
 _UNSAFE_NAME_CHARS = re.compile(r"[^\w .()\-]", re.UNICODE)
 _USER_DIR = re.compile(r"^user_\d+$")
+# Nama perangkat khusus Windows: file bernama CON.pdf, NUL.pdf, dst. bermasalah saat disimpan.
+_RESERVED = {"con", "prn", "aux", "nul", *(f"com{i}" for i in range(1, 10)), *(f"lpt{i}" for i in range(1, 10))}
 
 
 class StorageError(RuntimeError):
@@ -47,6 +49,8 @@ def sanitize_filename(name: str | None, max_length: int = 60) -> str:
     name = re.sub(r"\s+", " ", name).strip(" .")
     if not name:
         return "file"
+    if name.split(".")[0].lower() in _RESERVED:
+        name = "_" + name
     if len(name) > max_length:
         stem, dot, ext = name.rpartition(".")
         if dot and len(ext) <= 5:

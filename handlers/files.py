@@ -19,14 +19,13 @@ from telegram.ext import ContextTypes
 from config import Config
 from handlers.common import MSG_BUSY, get_services, menu_keyboard, serialized
 from handlers.start import EXPIRED_TEXT
-from services.pdf_common import get_page_count
 from utils.file_manager import StorageError, sanitize_filename
 from utils.file_validator import (
     KIND_LABELS,
     MSG_CORRUPT,
     ValidationError,
-    check_content,
     check_metadata,
+    inspect_content,
     too_large_message,
 )
 from utils.keyboards import (
@@ -302,8 +301,8 @@ async def _receive(
 
     # 5. Validasi isi file (magic bytes + bisa dibaca library) di thread terpisah
     try:
-        detected = await asyncio.to_thread(
-            check_content, dest, feature.kind, config.max_file_size
+        info = await asyncio.to_thread(
+            inspect_content, dest, feature.kind, config.max_file_size
         )
     except ValidationError as exc:
         files.delete_file(dest)
@@ -321,14 +320,6 @@ async def _receive(
         await message.reply_text(EXPIRED_TEXT, reply_markup=menu_only_keyboard())
         return
 
-    # Jumlah halaman (PDF) untuk ditampilkan dan dipakai validasi input halaman.
-    pages = None
-    if detected == "pdf":
-        try:
-            pages = await asyncio.to_thread(get_page_count, dest)
-        except Exception:
-            logger.warning("Gagal menghitung halaman", exc_info=True)
-
     # 6. Simpan ke session lalu tampilkan daftar terbaru
     session.touch()
     session.files.append(
@@ -337,8 +328,8 @@ async def _receive(
             name=sanitize_filename(file_name),
             path=dest,
             size=dest.stat().st_size,
-            kind=detected,
-            pages=pages,
+            kind=info.detected,
+            pages=info.pages,
         )
     )
     session.awaiting = AWAIT_INPUT.get(feature.key)

@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -32,7 +32,8 @@ class ConfigError(RuntimeError):
 
 @dataclass(frozen=True)
 class Config:
-    bot_token: str
+    # repr=False: token tidak ikut tercetak jika objek config tak sengaja masuk log
+    bot_token: str = field(repr=False)
     max_file_size: int
     max_files: int
     max_session_size: int
