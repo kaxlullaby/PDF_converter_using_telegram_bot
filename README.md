@@ -22,6 +22,14 @@ python doctor.py                              # Cek kesiapan sblm start
 python bot.py
 ```
 
+## Uji test bot
+```bash
+python -m unittest discover -s tests -t . -v      # tanpa instalasi tambahan
+python -m pip install -r requirements-dev.txt && pytest
+python tests/benchmark.py                         # ukur kecepatan bagian-bagian bot
+python doctor.py                                  # periksa kesiapan lingkungan
+```
+
 ---
 
 ## 1. Project Overview
