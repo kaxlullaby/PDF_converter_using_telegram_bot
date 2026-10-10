@@ -200,12 +200,19 @@ telegram-document-bot/
 Mulai dengan `/start` atau `/menu`, lalu tekan tombol fitur. Kirim file **sebagai dokumen** (📎 → File) agar kualitasnya utuh. Tombol **⬅️ Back** dan **❌ Cancel** tersedia di setiap langkah.
 
 - **Merge PDF** — kirim PDF satu per satu (2–20). Daftar file tampil setelah setiap kiriman. **🔄 Change Order** untuk menaikkan/menurunkan/menghapus file. Tekan **✅ Merge PDF**.
+  
 - **Split PDF** — kirim satu PDF, bot menampilkan jumlah halamannya. Ketik halaman: `1-5`, `2,4,7`, atau `1-3, 6, 9-10`. Hasil mengikuti urutan yang diketik.
+
 - **Compress PDF** — kirim satu PDF, pilih 🟢 Low / 🟡 Medium / 🔴 High. Hasil disertai `Original`, `Compressed`, `Reduction`. PDF yang isinya hampir teks saja tidak banyak mengecil; efek terbesar pada PDF berisi foto/scan.
+  
 - **PDF → JPG** — kirim satu PDF, tekan **Convert to JPG** (maks. 100 halaman, 150 dpi).
+  
 - **JPG → PDF** — kirim 1–20 gambar (JPG/JPEG/PNG; foto biasa juga diterima tetapi sudah dikompres Telegram). Atur urutan, tekan **Convert to PDF**. Tiap gambar menjadi satu halaman A4; foto HP yang miring ditegakkan otomatis.
+  
 - **Rotate PDF** — kirim satu PDF, pilih 90° / 180° / 270° (searah jarum jam).
+  
 - **Word → PDF** — kirim `.doc`/`.docx`, tekan **Convert to PDF**. Format dipertahankan sebisa mungkin; font yang tidak ada di server bisa diganti.
+  
 - **PDF → Word** — kirim satu PDF, tekan **Convert to Word**. Bot mengenali PDF 📄 *text-based* (teks diambil langsung) atau 🖼 *scanned* (dibaca dengan OCR, maks. 20 halaman scan).
 
 Selama proses berjalan tampil progress bar dengan tombol **❌ Cancel**. Perintah lain: `/history` (5 proses terakhir + total pemakaian), `/help`, dan `/stats` (admin).
