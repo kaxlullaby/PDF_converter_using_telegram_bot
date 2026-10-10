@@ -30,7 +30,6 @@ class Feature:
     key: str          # dipakai di callback_data -> "feature:<key>"
     label: str        # teks tombol di menu utama
     description: str  # penjelasan singkat
-    phase: int        # phase pengembangan saat fitur diaktifkan
     kind: str         # jenis input: "pdf" | "image" | "word"
     multi: bool = False   # True = terima banyak file (mode Collecting Files)
     min_files: int = 1    # minimal file agar boleh diproses
@@ -45,25 +44,25 @@ FEATURES: dict[str, Feature] = {
     f.key: f
     for f in (
         Feature("merge", "🔗 Merge PDF",
-                "Gabungkan 2–20 file PDF menjadi satu.", 3, "pdf",
+                "Gabungkan 2–20 file PDF menjadi satu.", "pdf",
                 multi=True, min_files=2, done_label="✅ Merge PDF"),
         Feature("split", "✂️ Split PDF",
-                "Ambil halaman tertentu dari satu PDF (contoh: 1-5 atau 2,4,7).", 3, "pdf"),
+                "Ambil halaman tertentu dari satu PDF (contoh: 1-5 atau 2,4,7).", "pdf"),
         Feature("compress", "📦 Compress PDF",
-                "Perkecil ukuran PDF (Low / Medium / High).", 4, "pdf"),
+                "Perkecil ukuran PDF (Low / Medium / High).", "pdf"),
         Feature("pdf2jpg", "🖼 PDF → JPG",
-                "Ubah setiap halaman PDF menjadi gambar JPG.", 4, "pdf",
+                "Ubah setiap halaman PDF menjadi gambar JPG.", "pdf",
                 done_label="🖼 Convert to JPG"),
         Feature("jpg2pdf", "📄 JPG → PDF",
-                "Gabungkan 1–20 gambar (JPG/PNG) menjadi satu PDF.", 4, "image",
+                "Gabungkan 1–20 gambar (JPG/PNG) menjadi satu PDF.", "image",
                 multi=True, min_files=1, done_label="📄 Convert to PDF"),
         Feature("rotate", "🔄 Rotate PDF",
-                "Putar halaman PDF 90°, 180°, atau 270°.", 3, "pdf"),
+                "Putar halaman PDF 90°, 180°, atau 270°.", "pdf"),
         Feature("word2pdf", "📝 Word → PDF",
-                "Ubah file .doc / .docx menjadi PDF.", 5, "word",
+                "Ubah file .doc / .docx menjadi PDF.", "word",
                 done_label="📄 Convert to PDF"),
         Feature("pdf2word", "📄 PDF → Word",
-                "Ubah PDF menjadi .docx (dengan OCR untuk PDF hasil scan).", 5, "pdf",
+                "Ubah PDF menjadi .docx (dengan OCR untuk PDF hasil scan).", "pdf",
                 done_label="📄 Convert to Word"),
     )
 }

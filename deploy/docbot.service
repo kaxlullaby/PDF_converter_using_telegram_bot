@@ -1,0 +1,51 @@
+# Layanan systemd untuk Document Bot.
+# Pasang:  sudo cp deploy/docbot.service /etc/systemd/system/docbot.service
+#          sudo systemctl daemon-reload && sudo systemctl enable --now docbot
+# Sesuaikan /opt/telegram-document-bot dan User/Group jika berbeda.
+
+[Unit]
+Description=Telegram Document Bot
+After=network-online.target
+Wants=network-online.target
+# Jika bot gagal start terus-menerus (mis. token salah), berhenti mencoba setelah 10x dalam 5 menit
+# supaya tidak membanjiri log. Setelah memperbaiki masalah: sudo systemctl reset-failed docbot
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=simple
+User=docbot
+Group=docbot
+WorkingDirectory=/opt/telegram-document-bot
+ExecStart=/opt/telegram-document-bot/.venv/bin/python bot.py
+Environment=PYTHONUNBUFFERED=1
+
+# Selalu nyalakan lagi jika mati (crash, di-kill karena kehabisan memori, dll.)
+Restart=always
+RestartSec=5
+# Beri waktu bot membatalkan proses dan menghapus file temp saat dimatikan
+TimeoutStopSec=30
+
+# --- Batas sumber daya (mencakup LibreOffice/Tesseract yang dijalankan bot) ---
+# Melindungi server dari PDF "bom" yang membengkak saat dibuka. Jika batas terlewati,
+# systemd menghentikan proses lalu Restart=always menyalakannya kembali.
+MemoryMax=1500M
+TasksMax=256
+
+# --- Pengamanan dasar ---
+NoNewPrivileges=true
+PrivateTmp=true
+
+# --- Pengamanan lebih ketat (OPSIONAL) ---
+# Aktifkan satu per satu dan uji Word -> PDF setelahnya. Jika LibreOffice gagal,
+# longgarkan lagi. Tanda "#" di depan baris dihapus untuk mengaktifkan.
+#ProtectSystem=strict
+#ProtectHome=true
+#ReadWritePaths=/opt/telegram-document-bot/temp /opt/telegram-document-bot/data /opt/telegram-document-bot/logs
+#Environment=HOME=/opt/telegram-document-bot/data
+#ProtectKernelTunables=true
+#ProtectControlGroups=true
+#RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

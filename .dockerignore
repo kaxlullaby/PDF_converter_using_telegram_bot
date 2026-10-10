@@ -1,0 +1,20 @@
+# Rahasia & data lokal TIDAK boleh masuk ke image
+.env
+.venv/
+venv/
+data/
+logs/
+temp/*
+*.db
+*.log
+
+# Tidak perlu di image
+.git/
+.gitignore
+__pycache__/
+*.pyc
+tests/
+deploy/
+docker-compose.yml
+Dockerfile
+.dockerignore

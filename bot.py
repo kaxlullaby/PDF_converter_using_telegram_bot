@@ -12,7 +12,7 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from telegram import BotCommand, Update
-from telegram.error import BadRequest, Conflict, NetworkError, TelegramError
+from telegram.error import BadRequest, Conflict, InvalidToken, NetworkError, TelegramError
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -43,6 +43,23 @@ PURGE_EVERY = 24 * 3600           # detik: hapus riwayat lama dari database
 LOW_DISK_BYTES = 1024 ** 3        # peringatan jika ruang disk < 1 GB
 
 
+class ConciseNetworkErrors(logging.Filter):
+    """Ringkas log "Network Retry Loop" dari python-telegram-bot.
+
+    Saat internet putus, pustaka itu mencetak traceback ratusan baris di setiap percobaan.
+    Filter ini menggantinya dengan satu baris berisi penyebab; error lain tidak disentuh.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.getMessage().startswith("Network Retry Loop") and record.exc_info:
+            exc = record.exc_info[1]
+            reason = str(exc) if exc is not None else "tidak diketahui"
+            record.msg = f"{record.getMessage()} Penyebab: {reason}"
+            record.args = ()
+            record.exc_info = record.exc_text = None
+        return True
+
+
 def setup_logging(level: str, log_file: Path | None = None) -> None:
     handlers: list[logging.Handler] = [logging.StreamHandler()]
     if log_file is not None:
@@ -50,6 +67,8 @@ def setup_logging(level: str, log_file: Path | None = None) -> None:
         handlers.append(
             RotatingFileHandler(log_file, maxBytes=1_000_000, backupCount=3, encoding="utf-8")
         )
+    for handler in handlers:
+        handler.addFilter(ConciseNetworkErrors())
     logging.basicConfig(
         format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
         level=getattr(logging, level, logging.INFO),
@@ -285,7 +304,22 @@ def main() -> None:
 
     unavailable = compute_unavailable(config)
     app = build_application(config, unavailable)
-    app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
+    try:
+        # bootstrap_retries=-1: jika internet belum siap saat start (mis. setelah komputer menyala),
+        # bot menunggu dan mencoba lagi terus-menerus, bukan langsung berhenti.
+        app.run_polling(
+            allowed_updates=Update.ALL_TYPES, drop_pending_updates=True, bootstrap_retries=-1
+        )
+    except InvalidToken:
+        raise SystemExit(
+            "❌ Token ditolak Telegram.\n"
+            "Periksa BOT_TOKEN di file .env (salin ulang dari @BotFather, tanpa spasi/tanda kutip)."
+        ) from None
+    except NetworkError as exc:
+        raise SystemExit(
+            f"❌ Tidak bisa terhubung ke Telegram: {exc}\n"
+            "Periksa internet, DNS, VPN/proxy, atau firewall. Diagnosis: python doctor.py --online"
+        ) from None
 
 
 if __name__ == "__main__":

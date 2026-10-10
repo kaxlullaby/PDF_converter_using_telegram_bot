@@ -36,6 +36,9 @@ class Conflict(TelegramError):
     pass
 
 
+class InvalidToken(TelegramError):
+    pass
+
 
 class RetryAfter(TelegramError):
     def __init__(self, retry_after):
@@ -61,10 +64,10 @@ def install_stubs() -> None:
         sys.modules[name] = module
 
     mod("telegram", InlineKeyboardButton=InlineKeyboardButton, InlineKeyboardMarkup=InlineKeyboardMarkup,
-        Update=type("Update", (), {}), Message=object, BotCommand=lambda *a: a)
+        Update=type("Update", (), {"ALL_TYPES": []}), Message=object, BotCommand=lambda *a: a)
     mod("telegram.constants", ParseMode=types.SimpleNamespace(HTML="HTML"))
     mod("telegram.error", TelegramError=TelegramError, NetworkError=NetworkError, BadRequest=BadRequest,
-        TimedOut=TimedOut, RetryAfter=RetryAfter, Conflict=Conflict)
+        TimedOut=TimedOut, RetryAfter=RetryAfter, Conflict=Conflict, InvalidToken=InvalidToken)
     mod("telegram.ext", Application=MagicMock(), CallbackQueryHandler=MagicMock(), CommandHandler=MagicMock(),
         ContextTypes=types.SimpleNamespace(DEFAULT_TYPE=None), MessageHandler=MagicMock(), filters=MagicMock())
     mod("dotenv", load_dotenv=lambda *a, **k: None)  # tes tidak boleh membaca .env asli Anda

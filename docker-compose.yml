@@ -1,0 +1,25 @@
+services:
+  docbot:
+    build: .
+    container_name: docbot
+    restart: unless-stopped
+    env_file: .env                       # BOT_TOKEN dkk. dibaca dari file ini (tidak masuk ke image)
+    environment:
+      DATABASE_PATH: /app/data/bot.db
+      LOG_FILE: /app/logs/bot.log
+    volumes:
+      - docbot_data:/app/data
+      - docbot_logs:/app/logs
+    # Batas sumber daya (melindungi server dari PDF/dokumen "bom")
+    mem_limit: 1536m
+    cpus: 1.5
+    pids_limit: 256
+    # Pengamanan
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  docbot_data:
+  docbot_logs:

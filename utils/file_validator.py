@@ -283,6 +283,6 @@ def _has_blocked_external_link(zf: zipfile.ZipFile, names: set[str]) -> bool:
 
 
 def _check_doc(size: int) -> None:
-    # Validasi mendalam .doc dilakukan LibreOffice saat konversi (Phase 5).
+    # Validasi mendalam .doc dilakukan LibreOffice saat konversi.
     if size < 512:
         raise ValidationError("corrupt", MSG_CORRUPT)

@@ -162,11 +162,8 @@ def build_panel(
                 "Tekan tombol di bawah untuk memulai."
             )
             return text, collecting_keyboard(False, feature.done_label)
-        # Cadangan: fitur tanpa panel khusus.
-        text = (
-            f"📂 <b>{feature.label}</b>\n\n{received}\n\n"
-            f"🚧 Pemrosesan akan diaktifkan pada Phase {feature.phase}."
-        )
+        # Cadangan umum untuk fitur satu-file tanpa panel khusus.
+        text = f"📂 <b>{feature.label}</b>\n\n{received}\n\nTekan tombol di bawah untuk memulai."
     return text, collecting_keyboard(feature.multi, feature.done_label)
 
 
