@@ -8,6 +8,20 @@ Dibuat dengan Python, modular, dan dilengkapi validasi file, session per user, p
 6. [Membuat Bot lewat BotFather](#6-membuat-bot-lewat-botfather) · 7. [Menjalankan Bot](#7-menjalankan-bot) · 8. [Struktur Project](#8-struktur-project) · 9. [Cara Menggunakan Setiap Fitur](#9-cara-menggunakan-setiap-fitur)
 10. [Keterbatasan](#10-keterbatasan) · 11. [Keamanan](#11-keamanan) · 12. [Deployment (24/7)](#12-deployment-247) · [Pengujian](#pengujian) · [Troubleshooting](#troubleshooting) · [Lisensi](#lisensi-dan-pustaka-pihak-ketiga)
 
+## Quick start tbrk
+
+```bash
+in terminal:
+
+cd telegram-document-bot
+python -m venv .venv                          # Windows (PowerShell): .venv\Scripts\Activate.ps1
+source .venv/bin/activate                     # Windows (Git Bash)  : source .venv/Scripts/activate
+python -m pip install -r requirements.txt
+cp .env.example .env                          # Windows: copy .env.example .env
+python doctor.py                              # Cek kesiapan sblm start
+python bot.py
+```
+
 ---
 
 ## 1. Project Overview
@@ -33,14 +47,14 @@ database/   SQLite: pengguna & ringkasan riwayat operasi
 
 | Fitur | Ringkasan |
 |---|---|
-| 🔗 Merge PDF | Gabungkan 2–20 PDF, urutan bisa diatur |
-| ✂️ Split PDF | Ambil halaman tertentu (`1-5`, `2,4,7`, `3-8`) |
-| 📦 Compress PDF | Tiga level: Low / Medium / High, dengan laporan ukuran sebelum–sesudah |
-| 🖼 PDF → JPG | 1 halaman = 1 JPG; 2–10 halaman = file satu per satu; lebih dari 10 = ZIP |
-| 📄 JPG → PDF | 1–20 gambar (JPG/PNG) menjadi PDF A4, urutan bisa diatur |
-| 🔄 Rotate PDF | Putar 90° / 180° / 270° searah jarum jam |
-| 📝 Word → PDF | `.doc` / `.docx` lewat LibreOffice |
-| 📄 PDF → Word | PDF teks diambil langsung; PDF hasil scan dibaca dengan OCR |
+|  Merge PDF | Gabungkan 2–20 PDF, urutan bisa diatur |
+|  Split PDF | Ambil halaman tertentu (`1-5`, `2,4,7`, `3-8`) |
+|  Compress PDF | Tiga level: Low / Medium / High, dengan laporan ukuran sebelum–sesudah |
+|  PDF → JPG | 1 halaman = 1 JPG; 2–10 halaman = file satu per satu; lebih dari 10 = ZIP |
+|  JPG → PDF | 1–20 gambar (JPG/PNG) menjadi PDF A4, urutan bisa diatur |
+|  Rotate PDF | Putar 90° / 180° / 270° searah jarum jam |
+|  Word → PDF | `.doc` / `.docx` lewat LibreOffice |
+|  PDF → Word | PDF teks diambil langsung; PDF hasil scan dibaca dengan OCR |
 
 Tambahan: antrean proses, progress bar, tombol Cancel, `/history` (riwayat Anda), `/stats` (khusus admin), dan `doctor.py` (pemeriksa kesiapan).
 
